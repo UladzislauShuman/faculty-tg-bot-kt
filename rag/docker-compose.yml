@@ -1,0 +1,86 @@
+# =============================================================================
+# Запуск бота ФПМИ БГУ на одной машине: PostgreSQL + Qdrant + бот.
+#   1. cp .env.example .env и заполнить значения;
+#   2. MODELS_COPY=1 ./scripts/prepare-models.sh  — подготовить модели в ./models;
+#   3. docker compose up -d --build
+# Порты закрыты от внешней сети (127.0.0.1): Telegram работает длинным опросом, входящий порт не нужен.
+# =============================================================================
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fpmi_bot
+      POSTGRES_USER: fpmi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      # Порт на хосте 5433, чтобы не занимать стандартный 5432 (на нём часто работает другой Postgres).
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fpmi -d fpmi_bot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    # Линейка клиента (1.17) совпадает с линейкой сервера.
+    image: qdrant/qdrant:v1.17.1
+    restart: unless-stopped
+    volumes:
+      - qdrant-data:/qdrant/storage
+    ports:
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
+
+  bot:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    environment:
+      # docker — адреса соседних контейнеров, журнал цветным текстом (json-logs — JSON); yandex — провайдер YandexGPT. Для локального Ollama уберите yandex.
+      SPRING_PROFILES_ACTIVE: ${BOT_PROFILES:-docker,yandex}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      BOT_HASH_SECRET: ${BOT_HASH_SECRET:?задайте BOT_HASH_SECRET в .env}
+      BOT_TELEGRAM_TOKEN: ${BOT_TELEGRAM_TOKEN:-}
+      BOT_ADMIN_IDS: ${BOT_ADMIN_IDS:-}
+      # Без значений по умолчанию: с профилем yandex пустой ключ или каталог останавливают запуск.
+      YANDEX_API_KEY: ${YANDEX_API_KEY:-unset}
+      YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID:-unset}
+      # Профили deepseek и qwen: пустой ключ при выбранном профиле останавливает запуск (проверка в ChatModelFactory).
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      QWEN_API_KEY: ${QWEN_API_KEY:-}
+      QWEN_BASE_URL: ${QWEN_BASE_URL:-}
+      QWEN_MODEL: ${QWEN_MODEL:-qwen-plus}
+      BOT_HTTP_API_KEY: ${BOT_HTTP_API_KEY:-}
+      # Telegram и HTTP-вход включаются отдельными флагами: без токена бот запускается и отвечает только на пробах здоровья.
+      BOT_TELEGRAM_ENABLED: ${BOT_TELEGRAM_ENABLED:-false}
+      BOT_HTTP_ENABLED: ${BOT_HTTP_ENABLED:-false}
+    volumes:
+      - ./models:/app/models:ro
+      - djl-cache:/app/.djl
+    ports:
+      - "127.0.0.1:${BOT_PORT:-8080}:8080"
+    # Лимит памяти: куча 2 ГБ + модели ONNX (≈ 3 ГБ нативной памяти) + запас.
+    mem_limit: 8g
+    # Время на остановку: бот дожидается уже принятых вопросов (до 95 с), затем закрывает базу. Docker по умолчанию ждёт 10 с и убил бы процесс раньше.
+    stop_grace_period: 130s
+    # Хост с Ollama доступен из контейнера по имени host.docker.internal (на Linux добавляется этой строкой).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+
+volumes:
+  postgres-data:
+  qdrant-data:
+  djl-cache:

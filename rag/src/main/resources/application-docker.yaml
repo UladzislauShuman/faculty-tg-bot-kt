@@ -1,0 +1,18 @@
+# =============================================================================
+# Профиль docker: запуск в docker-compose. Адреса соседних контейнеров. Журнал остаётся цветным текстом;
+# для JSON-журналов добавляется профиль json-logs (docker,json-logs).
+# Включается в compose: SPRING_PROFILES_ACTIVE=docker (можно вместе с yandex: docker,yandex).
+# =============================================================================
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/fpmi_bot
+
+bot:
+  knowledge:
+    qdrant:
+      host: qdrant
+  llm:
+    providers:
+      ollama:
+        # Ollama запущен на хосте (на Mac в Docker GPU недоступен, поэтому модель вне контейнера).
+        base-url: http://host.docker.internal:11434

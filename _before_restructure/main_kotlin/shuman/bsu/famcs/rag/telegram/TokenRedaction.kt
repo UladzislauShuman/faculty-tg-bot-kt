@@ -1,0 +1,18 @@
+package shuman.bsu.famcs.rag.telegram
+
+/**
+ * Вырезает токен бота из текста.
+ *
+ * Зачем: адрес Bot API содержит токен (`/bot<токен>/getUpdates`), а сообщения сетевых ошибок (таймаут соединения) приводят адрес
+ * целиком. Любое такое исключение, записанное в журнал как есть, раскрыло бы токен. Поэтому тексты ошибок Telegram
+ * перед записью в журнал и перед упаковкой в наши исключения пропускаются через [redact].
+ */
+object TokenRedaction {
+    /** Токен Telegram: число бота, двоеточие и 30–50 символов ключа; с префиксом `bot` в адресах и без него. */
+    private val TOKEN = Regex("(bot)?\\d{6,}:[A-Za-z0-9_-]{30,50}")
+
+    fun redact(text: String?): String = text.orEmpty().replace(TOKEN, "***")
+
+    /** Короткое описание ошибки для журнала: класс и текст с вырезанным токеном, без трассировки и вложенных причин. */
+    fun describe(error: Throwable): String = "${error.javaClass.simpleName}: ${redact(error.message)}"
+}

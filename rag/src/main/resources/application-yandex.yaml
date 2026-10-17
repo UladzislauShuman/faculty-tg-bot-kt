@@ -1,0 +1,43 @@
+# =============================================================================
+# Профиль yandex: основной провайдер — YandexGPT (Yandex AI Studio), локальный Ollama не нужен.
+# Включение: SPRING_PROFILES_ACTIVE=yandex. Нужны YANDEX_API_KEY и YANDEX_FOLDER_ID (см. .env.example).
+# Переопределяются только цепочки ролей; остальные параметры берутся из application.yaml.
+# GigaChat (резерв) добавится вторым звеном цепочки, когда будет написан провайдер.
+# =============================================================================
+bot:
+  llm:
+    providers:
+      # YandexGPT через OpenAI-совместимый интерфейс Yandex AI Studio.
+      # Переменные без значений по умолчанию: если YANDEX_API_KEY или YANDEX_FOLDER_ID не заданы, бот не запустится
+      # (иначе каждый вызов получал бы 400, а пользователи молча видели бы «перегрузка»).
+      yandex:
+        type: OPENAI_COMPATIBLE
+        base-url: https://llm.api.cloud.yandex.net/v1
+        api-key: ${YANDEX_API_KEY}
+        default-model: gpt://${YANDEX_FOLDER_ID}/yandexgpt-lite/latest
+        http-timeout: 45s
+        # Квота синхронных генераций Yandex — 10 одновременных. [оценка: брать меньше квоты]
+        max-concurrent-calls: 8
+        headers:
+          x-folder-id: ${YANDEX_FOLDER_ID}
+    roles:
+      classifier:
+        call-timeout: 15s
+        chain:
+          - { provider: yandex, model: "gpt://${YANDEX_FOLDER_ID}/yandexgpt-lite/latest" }
+      rewriter:
+        call-timeout: 30s
+        chain:
+          - { provider: yandex, model: "gpt://${YANDEX_FOLDER_ID}/yandexgpt-lite/latest" }
+      generator:
+        call-timeout: 30s
+        chain:
+          - { provider: yandex, model: "gpt://${YANDEX_FOLDER_ID}/yandexgpt-lite/latest" }
+      chat:
+        call-timeout: 30s
+        chain:
+          - { provider: yandex, model: "gpt://${YANDEX_FOLDER_ID}/yandexgpt-lite/latest" }
+      summarizer:
+        call-timeout: 30s
+        chain:
+          - { provider: yandex, model: "gpt://${YANDEX_FOLDER_ID}/yandexgpt-lite/latest" }

@@ -1,0 +1,39 @@
+# =============================================================================
+# Профиль qwen: Qwen (Alibaba Cloud Model Studio) через OpenAI-совместимый API.
+# Включение: SPRING_PROFILES_ACTIVE=qwen. Нужны QWEN_API_KEY и QWEN_BASE_URL (см. .env.example); без них бот не запустится.
+# Адрес зависит от региона и рабочего пространства: https://<WorkspaceId>.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1
+# (Сингапур; есть Вирджиния, Гонконг, Токио). Ключ привязан к региону: чужой регион даёт 401 (прочитано 2026-10-16).
+# Имена моделей меняются часто; QWEN_MODEL задаёт модель, `qwen-plus` — пример из документации. [проверить в консоли при регистрации]
+# Переопределяются только провайдеры и цепочки ролей; остальные параметры берутся из application.yaml.
+# =============================================================================
+bot:
+  llm:
+    providers:
+      qwen:
+        type: OPENAI_COMPATIBLE
+        base-url: ${QWEN_BASE_URL}
+        api-key: ${QWEN_API_KEY}
+        default-model: ${QWEN_MODEL:qwen-plus}
+        http-timeout: 60s
+        max-concurrent-calls: 8
+    roles:
+      classifier:
+        call-timeout: 15s
+        chain:
+          - { provider: qwen, model: "${QWEN_MODEL:qwen-plus}" }
+      rewriter:
+        call-timeout: 30s
+        chain:
+          - { provider: qwen, model: "${QWEN_MODEL:qwen-plus}" }
+      generator:
+        call-timeout: 45s
+        chain:
+          - { provider: qwen, model: "${QWEN_MODEL:qwen-plus}" }
+      chat:
+        call-timeout: 30s
+        chain:
+          - { provider: qwen, model: "${QWEN_MODEL:qwen-plus}" }
+      summarizer:
+        call-timeout: 30s
+        chain:
+          - { provider: qwen, model: "${QWEN_MODEL:qwen-plus}" }

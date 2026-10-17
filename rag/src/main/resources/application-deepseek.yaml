@@ -1,0 +1,39 @@
+# =============================================================================
+# Профиль deepseek: DeepSeek через OpenAI-совместимый API.
+# Включение: SPRING_PROFILES_ACTIVE=deepseek. Нужен DEEPSEEK_API_KEY (см. .env.example); без него бот не запустится.
+# Документация: https://api-docs.deepseek.com/ (прочитано 2026-10-16: base URL, Bearer-ключ, модели deepseek-flash и deepseek-v4-pro).
+# Цены за 1 млн токенов, USD (прочитано): deepseek-flash вход 0,15 (кэш 0,003) / выход 0,6 в обычное время, вдвое дороже в пик (01-04 и 06-10 UTC по будням).
+# Переопределяются только провайдеры и цепочки ролей; остальные параметры берутся из application.yaml.
+# =============================================================================
+bot:
+  llm:
+    providers:
+      deepseek:
+        type: OPENAI_COMPATIBLE
+        base-url: https://api.deepseek.com
+        api-key: ${DEEPSEEK_API_KEY}
+        default-model: deepseek-flash
+        http-timeout: 60s
+        # Лимит одновременных запросов у DeepSeek 2500 (прочитано); берём малую долю: бот работает на одном процессоре.
+        max-concurrent-calls: 8
+    roles:
+      classifier:
+        call-timeout: 15s
+        chain:
+          - { provider: deepseek, model: "deepseek-flash" }
+      rewriter:
+        call-timeout: 30s
+        chain:
+          - { provider: deepseek, model: "deepseek-flash" }
+      generator:
+        call-timeout: 45s
+        chain:
+          - { provider: deepseek, model: "deepseek-flash" }
+      chat:
+        call-timeout: 30s
+        chain:
+          - { provider: deepseek, model: "deepseek-flash" }
+      summarizer:
+        call-timeout: 30s
+        chain:
+          - { provider: deepseek, model: "deepseek-flash" }
