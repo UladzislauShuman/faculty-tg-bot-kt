@@ -49,6 +49,12 @@ data class LlmProperties(
         @field:Positive val maxConcurrentCalls: Int,
         /** Дополнительные заголовки (например, идентификатор каталога Yandex Cloud). Не заданы — заголовков нет. */
         val headers: Map<String, String> = emptyMap(),
+        /**
+         * Дополнительные поля тела запроса к OpenAI-совместимому провайдеру. Нужны для параметров, которых нет в стандарте:
+         * у DeepSeek режим рассуждений включён по умолчанию, и его отключает `thinking: { type: disabled }`; без этого скрытые
+         * рассуждения многократно увеличивают число выходных токенов. Не заданы — тело запроса стандартное. Для Ollama не используется.
+         */
+        val requestBody: Map<String, Any> = emptyMap(),
         /** Параметры, которые есть только у Ollama. Обязательны при `type: OLLAMA`. */
         @field:Valid val ollama: OllamaProperties?,
     ) {

@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ResponseStatusException
 import shuman.bsu.famcs.rag.api.FeedbackService
@@ -25,6 +26,7 @@ import shuman.bsu.famcs.rag.ui.http.configuration.properties.HttpEntryProperties
 import shuman.bsu.famcs.rag.ui.http.dto.AskRequest
 import shuman.bsu.famcs.rag.ui.http.dto.AskResponse
 import shuman.bsu.famcs.rag.ui.http.dto.FeedbackRequest
+import shuman.bsu.famcs.rag.ui.http.dto.TraceDto
 import java.security.MessageDigest
 import java.time.Clock
 import java.util.concurrent.atomic.AtomicLong
@@ -52,12 +54,14 @@ class HttpEntryController(
      *
      * @param apiKey ключ из заголовка `X-Api-Key`.
      * @param request идентификатор тестового пользователя и текст вопроса.
+     * @param trace `true` — добавить в ответ трассу: ветку, запрос после переформулирования, найденные разделы, модель, токены.
      * @return статус, текст ответа, источники и номер записи журнала для оценки.
      */
     @PostMapping("/ask")
     fun ask(
         @RequestHeader("X-Api-Key") apiKey: String?,
         @Valid @RequestBody request: AskRequest,
+        @RequestParam(defaultValue = "false") trace: Boolean,
     ): AskResponse {
         authorize(apiKey)
         val userId = TelegramId(request.userId)
@@ -69,7 +73,7 @@ class HttpEntryController(
             }
             core.ask(RagRequest(userId, ChatId(request.userId), UpdateId(updateIds.incrementAndGet()), request.text, clock.instant()))
         }
-        return reply.toResponse()
+        return reply.toResponse(withTrace = trace)
     }
 
     /**
@@ -97,13 +101,14 @@ class HttpEntryController(
         if (!MessageDigest.isEqual(expected, actual)) throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Неверный ключ")
     }
 
-    /** Переводит ответ системы в тело HTTP-ответа. */
-    private fun RagReply.toResponse() = AskResponse(
+    /** Переводит ответ системы в тело HTTP-ответа; трасса добавляется, только если её просили. */
+    private fun RagReply.toResponse(withTrace: Boolean) = AskResponse(
         status = status.name,
         text = text,
         sources = sources.map(AnswerSource::toDto),
         answerId = answerId?.value,
         elapsedMs = elapsed.inWholeMilliseconds,
+        trace = if (withTrace) trace?.let(TraceDto::of) else null,
     )
 }
 

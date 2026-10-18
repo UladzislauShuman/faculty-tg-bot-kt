@@ -130,6 +130,32 @@ class RagServiceImplTest {
     }
 
     @Test
+    fun `трасса ответа показывает ветку, запрос поиска, найденные разделы и модель`() = runTest {
+        val h = harness(hits = listOf(TestRag.hit("practice", text = "Практика проходит осенью.")))
+
+        val trace = assertNotNull(h.core.ask(h.request("Когда практика?")).trace)
+
+        assertEquals("RAG", trace.route)
+        assertEquals("Когда практика?", trace.query)
+        val passage = trace.passages.single()
+        assertEquals("https://fpmi.bsu.by/practice", passage.url)
+        assertEquals("Практика проходит осенью.", passage.text)
+        assertEquals("fake-model", trace.model)
+        assertEquals(listOf("https://fpmi.bsu.by/practice"), trace.candidates.map { it.url }, "кандидаты поиска попадают в трассу")
+        assertTrue(trace.candidates.single().selected)
+    }
+
+    @Test
+    fun `у ветки без поиска трасса есть, а найденных разделов нет`() = runTest {
+        val h = harness(llm(classifier = "SMALLTALK"))
+
+        val trace = assertNotNull(h.core.ask(h.request("Спасибо большое, до свидания")).trace)
+
+        assertEquals("SMALLTALK", trace.route)
+        assertTrue(trace.passages.isEmpty())
+    }
+
+    @Test
     fun `пустая выдача поиска даёт ответ не нашёл без вызова генератора`() = runTest {
         val llm = llm()
         val h = harness(llm, hits = emptyList())

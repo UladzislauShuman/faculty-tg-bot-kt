@@ -4,12 +4,14 @@ import io.micrometer.core.instrument.MeterRegistry
 import shuman.bsu.famcs.rag.knowledge.embedding.EmbeddingProvider
 import shuman.bsu.famcs.rag.knowledge.model.HybridSearchRequest
 import shuman.bsu.famcs.rag.knowledge.model.RetrievalResult
+import shuman.bsu.famcs.rag.knowledge.model.RetrievedCandidate
 import shuman.bsu.famcs.rag.knowledge.model.RetrievedPassage
 import shuman.bsu.famcs.rag.knowledge.model.SearchHit
 import shuman.bsu.famcs.rag.knowledge.rerank.Reranker
 import shuman.bsu.famcs.rag.knowledge.sparse.Bm25SparseEncoder
 import shuman.bsu.famcs.rag.knowledge.store.KnowledgeBaseReader
 import shuman.bsu.famcs.rag.platform.metrics.timed
+import kotlin.time.TimeSource
 
 /**
  * Поиск знаний по вопросу: от текста запроса до трёх лучших разделов.
@@ -35,18 +37,54 @@ class KnowledgeRetriever(
      * @return лучшие разделы с оценками; пустой список, если ничего не нашлось.
      */
     suspend fun retrieve(query: String): RetrievalResult {
+        val searchStart = TimeSource.Monotonic.markNow()
         val hits = meters.timed("retrieval.latency", "stage", "search") {
             reader.search(HybridSearchRequest(dense = embeddings.embedQuery(query), sparse = sparse.encodeQuery(query)))
         }
+        val searchMillis = searchStart.elapsedNow().inWholeMilliseconds
         val parents = uniqueParents(hits)
-        if (parents.isEmpty()) return RetrievalResult(emptyList(), candidates = 0)
+        if (parents.isEmpty()) return RetrievalResult(emptyList(), candidates = 0, searchMillis = searchMillis)
 
         if (reranker == null) {
-            return RetrievalResult(parents.take(topN).map { it.toPassage(relevance = null) }, parents.size)
+            val selected = parents.take(topN)
+            val pool = parents.map { it.toCandidate(relevance = null, selected = it in selected) }
+            return RetrievalResult(selected.map { it.toPassage(relevance = null) }, parents.size, pool, searchMillis)
         }
+        val rerankStart = TimeSource.Monotonic.markNow()
         val scores = meters.timed("retrieval.latency", "stage", "rerank") { reranker.score(query, parents.map { it.parentText }) }
-        val ranked = parents.zip(scores).sortedByDescending { (_, score) -> score }.take(topN)
-        return RetrievalResult(ranked.map { (hit, score) -> hit.toPassage(score) }, parents.size)
+        val rerankMillis = rerankStart.elapsedNow().inWholeMilliseconds
+        val ranked = parents.zip(scores).sortedByDescending { (_, score) -> score }
+        val selected = ranked.take(topN).map { it.first }.toSet()
+        // Кандидаты идут в порядке реранкера: сверху то, что он счёл лучшим, отметка «выбран» у первых topN.
+        val pool = ranked.map { (hit, score) -> hit.toCandidate(score, selected = hit in selected) }
+        return RetrievalResult(
+            ranked.take(topN).map { (hit, score) ->
+                hit.toPassage(score)
+            },
+            parents.size,
+            pool,
+            searchMillis,
+            rerankMillis,
+        )
+    }
+
+    /** Кандидат для разбора поиска: раздел с оценкой, длиной и началом фрагмента, по которому он найден. */
+    private fun SearchHit.toCandidate(
+        relevance: Double?,
+        selected: Boolean,
+    ) = RetrievedCandidate(
+        parentId = parentId,
+        url = url,
+        title = title,
+        relevance = relevance,
+        parentChars = parentText.length,
+        matchedFragment = text.take(MATCHED_PREVIEW),
+        selected = selected,
+    )
+
+    private companion object {
+        /** Сколько знаков найденного фрагмента показывается в трассе. */
+        const val MATCHED_PREVIEW = 160
     }
 
     /** Несколько фрагментов одного раздела дают один раздел. Порядок поиска сохраняется. */

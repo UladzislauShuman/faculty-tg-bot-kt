@@ -53,6 +53,8 @@ RAG-бот для Telegram: отвечает студентам и абитур�
 | Вход в систему | `api/RagService` → `assistant/pipeline/service/implementation/RagServiceImpl` |
 | Порядок шагов одного вопроса | `assistant/pipeline/service/AnswerPipeline` |
 | Ветка с поиском по базе знаний | `assistant/intent/handler/implementation/RagHandler` → `knowledge/retrieval/KnowledgeRetriever` |
+| Генерация ответа по найденным разделам (отдельно от поиска) | `assistant/intent/generator/implementation/LlmAnswerGenerator` |
+| Трасса ответа (ветка, запрос поиска, найденные разделы, модель, токены) | `api/model/AnswerTrace`; в HTTP-входе `POST /api/v1/ask?trace=true` |
 | Обновление базы знаний | `knowledge/indexing/Indexer` (запуск: `knowledge/indexing/job`) |
 | Кто кого получает | `assistant/configuration/*Configuration`, `knowledge/configuration`, `llm/configuration` |
 
@@ -106,6 +108,7 @@ curl -s -X POST localhost:8080/api/v1/ask -H 'Content-Type: application/json' -H
 | `./gradlew build` | Форматирование (ktlint), компиляция без предупреждений, юнит-тесты (быстрые, без сети) |
 | `./gradlew integrationTest` | PostgreSQL и Qdrant в контейнерах (нужен Docker), сборка всего контекста приложения |
 | `./gradlew modelTest` | Паритет моделей ONNX с Python (нужны файлы из `models/`) |
+| `./gradlew evalTest` | Качество поиска на наборе вопросов `eval/qa-set.yaml` (нужны Qdrant с индексом и файлы моделей). Отчёт: `build/reports/eval/retrieval.md` |
 
 ## Команды бота
 

@@ -197,6 +197,7 @@ class KnowledgeConfiguration {
             childSplitter = RecursiveCharacterSplitter(chunking.childSize, chunking.childOverlap, chunking.childSeparators),
             contentSelectors = chunking.contentSelectors,
             removedTags = chunking.removedTags,
+            maxParentChars = chunking.parentMaxChars,
         )
     }
 

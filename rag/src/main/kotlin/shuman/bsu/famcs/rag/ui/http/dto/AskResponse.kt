@@ -8,6 +8,7 @@ package shuman.bsu.famcs.rag.ui.http.dto
  * @property sources источники ответа.
  * @property answerId номер записи журнала для оценки, если ответ можно оценить.
  * @property elapsedMs время обработки, мс.
+ * @property trace трасса ответа; есть только при `trace=true` в запросе.
  */
 data class AskResponse(
     val status: String,
@@ -15,6 +16,7 @@ data class AskResponse(
     val sources: List<SourceDto>,
     val answerId: Long?,
     val elapsedMs: Long,
+    val trace: TraceDto? = null,
 ) {
     data class SourceDto(
         val url: String,

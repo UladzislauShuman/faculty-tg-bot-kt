@@ -27,6 +27,8 @@ class ParentChildHtmlChunker(
     private val contentSelectors: List<String>,
     /** Теги, которые вырезаются из блока до преобразования: скрипты, формы, навигация, шапка, подвал. */
     private val removedTags: List<String>,
+    /** Предельный размер родителя в символах; длиннее делится на окна. 0 — без ограничения. */
+    private val maxParentChars: Int = 0,
 ) : Chunker {
     override fun supports(mediaType: String): Boolean = mediaType.startsWith("text/html")
 
@@ -41,7 +43,10 @@ class ParentChildHtmlChunker(
         }
         removedTags.forEach { tag -> block.select(tag).remove() }
 
-        val sections = headerSplitter.split(converter.convert(block))
+        // Раздел без внутренних заголовков (хроника года) делится на окна: реранкер читает только начало длинного раздела.
+        val sections = headerSplitter.split(converter.convert(block)).flatMap { section ->
+            ParentWindowSplitter.split(section.text, maxParentChars).map { section.copy(text = it) }
+        }
         val parents = sections.mapIndexed { index, section ->
             ParentChunk(
                 id = stableId("${document.url}|parent|$index|${section.text}"),

@@ -75,6 +75,30 @@ class KnowledgeRetrieverTest {
     }
 
     @Test
+    fun `в результате все кандидаты в порядке реранкера с отметкой выбран и фрагментом, по которому нашлись`() = runTest {
+        val hits = listOf(hit("1", "p1", "про экзамены"), hit("2", "p2", "про практику"), hit("3", "p3", "про общежитие"))
+
+        val result = retriever(hits, keywordReranker, topN = 2).retrieve("как пройти практику")
+
+        assertEquals(listOf("p2", "p1", "p3"), result.pool.map { it.parentId }, "порядок реранкера, не поиска")
+        assertEquals(listOf(true, true, false), result.pool.map { it.selected }, "выбраны первые topN")
+        assertEquals(0.9, result.pool.first().relevance)
+        assertEquals("фрагмент 2", result.pool.first().matchedFragment)
+        assertEquals("про практику".length, result.pool.first().parentChars)
+    }
+
+    @Test
+    fun `без реранкера кандидаты идут в порядке поиска без оценок`() = runTest {
+        val hits = listOf(hit("1", "p1", "а"), hit("2", "p2", "б"), hit("3", "p3", "в"))
+
+        val result = retriever(hits, reranker = null, topN = 2).retrieve("вопрос")
+
+        assertEquals(listOf("p1", "p2", "p3"), result.pool.map { it.parentId })
+        assertEquals(listOf(true, true, false), result.pool.map { it.selected })
+        assertNull(result.pool.first().relevance)
+    }
+
+    @Test
     fun `без реранкера берутся первые topN в порядке поиска и оценки нет`() = runTest {
         val hits = listOf(hit("1", "p1", "а"), hit("2", "p2", "б"), hit("3", "p3", "в"))
 

@@ -9,6 +9,8 @@ import shuman.bsu.famcs.rag.assistant.intent.classifier.GreetingMatcher
 import shuman.bsu.famcs.rag.assistant.intent.classifier.IntentClassifier
 import shuman.bsu.famcs.rag.assistant.intent.classifier.implementation.AlwaysRagClassifier
 import shuman.bsu.famcs.rag.assistant.intent.classifier.implementation.LlmIntentClassifier
+import shuman.bsu.famcs.rag.assistant.intent.generator.AnswerGenerator
+import shuman.bsu.famcs.rag.assistant.intent.generator.implementation.LlmAnswerGenerator
 import shuman.bsu.famcs.rag.assistant.intent.handler.IntentHandler
 import shuman.bsu.famcs.rag.assistant.intent.handler.implementation.ChatHandler
 import shuman.bsu.famcs.rag.assistant.intent.handler.implementation.RagHandler
@@ -25,19 +27,25 @@ import java.time.Clock
  */
 @Configuration(proxyBeanMethods = false)
 class IntentConfiguration {
-    /** Ветка RAG: поиск в базе знаний и ответ модели по найденным разделам. */
+    /** Генерация ответа по найденным разделам: модель с ролью GENERATOR. */
+    @Bean
+    fun answerGenerator(
+        llm: LlmClient,
+        prompts: PromptLibrary,
+        properties: RagHandlerProperties,
+    ): AnswerGenerator = LlmAnswerGenerator(llm, prompts, properties.noInfoMarker)
+
+    /** Ветка RAG: поиск в базе знаний и ответ по найденным разделам. */
     @Bean
     fun ragHandler(
         retriever: KnowledgeRetriever,
-        llm: LlmClient,
-        prompts: PromptLibrary,
+        generator: AnswerGenerator,
         properties: RagHandlerProperties,
         messages: BotMessagesProperties,
         clock: Clock,
     ): IntentHandler = RagHandler(
         retriever = retriever,
-        llm = llm,
-        prompts = prompts,
+        generator = generator,
         properties = properties,
         noInfoText = messages.noInfo,
         zone = clock.zone,

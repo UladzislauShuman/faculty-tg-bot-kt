@@ -81,3 +81,41 @@ class ParentChildHtmlChunkerParityTest {
         assertTrue(first.children.all { first.parentOf(it) != null })
     }
 }
+
+/** Ограничение размера родителя: настройка, которой в Python нет, поэтому проверяется отдельно от паритета. */
+class ParentSizeLimitTest {
+    private fun chunker(maxParentChars: Int) = ParentChildHtmlChunker(
+        converter = HtmlToMarkdown(escapeAsterisks = true, escapeUnderscores = true, bullets = "*+-", absolutizeLinks = false),
+        headerSplitter = MarkdownHeaderSplitter(listOf(MarkdownHeaderSplitter.Header("##", "H2"))),
+        childSplitter = RecursiveCharacterSplitter(chunkSize = 300, chunkOverlap = 50, separators = listOf("\n\n", "\n", ".", " ", "")),
+        contentSelectors = listOf("div#block-famcs-content"),
+        removedTags = listOf("script"),
+        maxParentChars = maxParentChars,
+    )
+
+    private val chronicle = FetchedDocument(
+        url = "https://fpmi.bsu.by/history-1997",
+        mediaType = "text/html",
+        body = "<html><head><title>История 1997</title></head><body><div id=\"block-famcs-content\"><h2>Хроника</h2>" +
+            List(30) { "<p>Событие номер $it: на факультете произошло важное дело, о котором помнят.</p>" }.joinToString("") +
+            "</div></body></html>",
+        fetchedAt = Instant.parse("2026-10-08T00:00:00Z"),
+    )
+
+    @Test
+    fun `длинный раздел без вложенных заголовков делится на родителей в пределах размера, дети привязаны к своему родителю`() {
+        val result = chunker(maxParentChars = 600).chunk(chronicle)
+
+        assertTrue(result.parents.size > 3, "30 событий не помещаются в 600 знаков")
+        assertTrue(result.parents.all { it.text.length <= 600 }, "каждый родитель в пределах размера")
+        assertTrue(result.parents.all { it.headings["H2"] == "Хроника" }, "заголовок раздела у каждого окна")
+        val parentIds = result.parents.map { it.id }.toSet()
+        assertEquals(parentIds.size, result.parents.size, "идентификаторы родителей разные")
+        assertTrue(result.children.all { it.parentId in parentIds }, "каждый ребёнок указывает на существующего родителя")
+    }
+
+    @Test
+    fun `нулевой предел оставляет раздел целым`() {
+        assertEquals(1, chunker(maxParentChars = 0).chunk(chronicle).parents.size)
+    }
+}

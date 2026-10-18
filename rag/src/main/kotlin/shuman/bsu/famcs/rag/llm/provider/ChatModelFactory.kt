@@ -84,6 +84,8 @@ object ChatModelFactory {
             .apiKey(key)
             .modelName(properties.defaultModel)
             .customHeaders(properties.headers)
+            // Дополнительные поля тела запроса (например, отключение режима рассуждений у DeepSeek).
+            .customParameters(properties.requestBody)
             .timeout(properties.httpTimeout)
             .maxRetries(0)
             .logRequests(false)

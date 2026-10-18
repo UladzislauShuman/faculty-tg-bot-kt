@@ -147,6 +147,7 @@ class RagServiceImpl(
             text = assembler.assemble(result.output),
             sources = result.output.sources,
             answerId = answerId,
+            trace = result.toTrace(usage.total),
         )
         return Finished(reply, route = result.intent.name, usage = usage.total)
     }

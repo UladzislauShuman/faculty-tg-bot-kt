@@ -1,0 +1,25 @@
+# =============================================================================
+# Профиль ollama-cloud: облачная модель через локальный Ollama (вы вошли в аккаунт Ollama, запросы уходят на ollama.com).
+# Включение: SPRING_PROFILES_ACTIVE=docker,ollama-cloud. Ключ API не нужен, платить не нужно: бесплатный план с лимитом использования
+# (лимит смотрите в настройках аккаунта: ollama.com/settings/usage). Данные уходят на серверы Ollama: нужно согласие пользователя.
+# Модели в облаке снимаются с обслуживания (qwen3-coder:480b закрыт 2026-07-15): если вызов вернул «retired», смените имя.
+# Переопределяются только цепочки ролей; остальные параметры берутся из application.yaml.
+# =============================================================================
+bot:
+  llm:
+    roles:
+      classifier:
+        chain:
+          - { provider: ollama, model: "gemma4:31b-cloud" }
+      rewriter:
+        chain:
+          - { provider: ollama, model: "gemma4:31b-cloud" }
+      generator:
+        chain:
+          - { provider: ollama, model: "gemma4:31b-cloud" }
+      chat:
+        chain:
+          - { provider: ollama, model: "gemma4:31b-cloud" }
+      summarizer:
+        chain:
+          - { provider: ollama, model: "gemma4:31b-cloud" }

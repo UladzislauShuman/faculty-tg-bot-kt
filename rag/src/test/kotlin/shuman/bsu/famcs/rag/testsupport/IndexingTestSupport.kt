@@ -192,6 +192,8 @@ object TestCrawler {
         startUrl: String = "https://site.test",
         maxDepth: Int = 5,
         respectRobots: Boolean = true,
+        paginationParameter: String = "",
+        useCanonicalUrl: Boolean = false,
     ) = KnowledgeProperties.Crawler(
         startUrl = startUrl,
         maxDepth = maxDepth,
@@ -203,6 +205,8 @@ object TestCrawler {
         excludedExtensions = listOf(".pdf", ".jpg", ".png"),
         excludedPathParts = listOf("/admin", "/user"),
         respectRobotsTxt = respectRobots,
+        paginationParameter = paginationParameter,
+        useCanonicalUrl = useCanonicalUrl,
         extraCertificates = emptyList(),
     )
 
@@ -218,9 +222,12 @@ object TestCrawler {
     fun page(
         vararg sections: Pair<String, String>,
         links: List<String> = emptyList(),
+        canonical: String? = null,
     ): String {
         val body = sections.joinToString("") { (title, text) -> "<h2>$title</h2><p>$text</p>" }
         val anchors = links.joinToString("") { "<a href=\"$it\">ссылка</a>" }
-        return "<html><head><title>Страница</title></head><body><div id=\"block-famcs-content\">$body$anchors</div></body></html>"
+        val canonicalTag = canonical?.let { "<link rel=\"canonical\" href=\"$it\"/>" }.orEmpty()
+        val head = "<head><title>Страница</title>$canonicalTag</head>"
+        return "<html>$head<body><div id=\"block-famcs-content\">$body$anchors</div></body></html>"
     }
 }

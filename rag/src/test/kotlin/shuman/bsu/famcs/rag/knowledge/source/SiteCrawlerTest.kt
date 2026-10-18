@@ -14,7 +14,17 @@ class SiteCrawlerTest {
         site: InMemorySite,
         maxDepth: Int = 5,
         respectRobots: Boolean = true,
-    ) = SiteCrawler(site, TestCrawler.settings(maxDepth = maxDepth, respectRobots = respectRobots))
+        paginationParameter: String = "",
+        useCanonicalUrl: Boolean = false,
+    ) = SiteCrawler(
+        site,
+        TestCrawler.settings(
+            maxDepth = maxDepth,
+            respectRobots = respectRobots,
+            paginationParameter = paginationParameter,
+            useCanonicalUrl = useCanonicalUrl,
+        ),
+    )
 
     @Test
     fun `обход идёт по ссылкам одного домена и скачивает каждую страницу один раз`() = runTest {
@@ -49,6 +59,111 @@ class SiteCrawlerTest {
 
         assertEquals(1, site.requested.count { it == "https://site.test/news" })
         assertEquals(2, result.documents.size)
+    }
+
+    @Test
+    fun `листание списков доходит до новостей на следующих страницах, но сами списки в документы не попадают`() = runTest {
+        val site = InMemorySite(
+            mapOf(
+                "https://site.test" to TestCrawler.page("Главная" to "текст", links = listOf("/news")),
+                "https://site.test/news" to
+                    TestCrawler.page("Новости" to "список", links = listOf("/item1", "/news?page=1", "/news?page=0&x=1")),
+                "https://site.test/news?page=1" to TestCrawler.page(
+                    "Новости 2" to "список",
+                    links = listOf("/item2", "/news?page=2&utm=a"),
+                ),
+                "https://site.test/news?page=2" to TestCrawler.page("Новости 3" to "список", links = listOf("/item3")),
+                "https://site.test/item1" to TestCrawler.page("Новость 1" to "текст"),
+                "https://site.test/item2" to TestCrawler.page("Новость 2" to "текст"),
+                "https://site.test/item3" to TestCrawler.page("Новость 3" to "текст"),
+            ),
+        )
+
+        val result = crawl(site, paginationParameter = "page").crawl()
+
+        assertEquals(
+            setOf(
+                "https://site.test",
+                "https://site.test/news",
+                "https://site.test/item1",
+                "https://site.test/item2",
+                "https://site.test/item3",
+            ),
+            result.documents.map { it.url }.toSet(),
+            "новости со 2-й и 3-й страницы списка найдены, страницы списков ?page=N не сохранены",
+        )
+        assertEquals(1, site.requested.count { it == "https://site.test/news" }, "?page=0 и прочие параметры не создают дубль списка")
+    }
+
+    @Test
+    fun `листание длинного списка не упирается в лимит глубины`() = runTest {
+        // Пейджер даёт только «вперёд» и «назад», как у сайта факультета: страница 8 лежала бы на глубине 9.
+        val pages = mutableMapOf(
+            "https://site.test" to TestCrawler.page("Главная" to "текст", links = listOf("/news")),
+            "https://site.test/news" to TestCrawler.page("Новости" to "список", links = listOf("/news?page=1")),
+            "https://site.test/last" to TestCrawler.page("Последняя новость" to "текст"),
+        )
+        for (n in 1..8) {
+            val next = if (n < 8) "/news?page=${n + 1}" else "/last"
+            pages["https://site.test/news?page=$n"] = TestCrawler.page("Список $n" to "список", links = listOf("/news?page=${n - 1}", next))
+        }
+
+        val urls = crawl(InMemorySite(pages), maxDepth = 3, paginationParameter = "page").crawl().documents.map { it.url }
+
+        assertTrue("https://site.test/last" in urls, "новость с 8-й страницы списка найдена при глубине 3")
+    }
+
+    @Test
+    fun `страницы с одним каноническим адресом склеиваются в одну под каноническим адресом`() = runTest {
+        val site = InMemorySite(
+            mapOf(
+                "https://site.test" to
+                    TestCrawler.page("Главная" to "текст", links = listOf("/enrollee", "/Admissions-campaign", "/other", "/foreign")),
+                "https://site.test/enrollee" to
+                    TestCrawler.page("Абитуриенту" to "текст", canonical = "https://site.test/Admissions-campaign"),
+                "https://site.test/Admissions-campaign" to
+                    TestCrawler.page("Абитуриенту" to "текст", canonical = "https://site.test/Admissions-campaign"),
+                "https://site.test/other" to TestCrawler.page("Другая" to "текст"),
+                "https://site.test/foreign" to TestCrawler.page("Чужой канонический" to "текст", canonical = "https://elsewhere.test/page"),
+            ),
+        )
+
+        val urls = crawl(site, useCanonicalUrl = true).crawl().documents.map { it.url }
+
+        assertEquals(1, urls.count { it == "https://site.test/Admissions-campaign" }, "две копии стали одной")
+        assertTrue("https://site.test/enrollee" !in urls, "адрес-алиас в базу не идёт")
+        assertTrue(
+            "https://site.test/other" in urls && "https://site.test/foreign" in urls,
+            "страница без канонического или с чужим остаётся под своим адресом",
+        )
+        assertEquals(4, urls.size)
+    }
+
+    @Test
+    fun `без настройки канонические адреса не используются`() = runTest {
+        val site = InMemorySite(
+            mapOf(
+                "https://site.test" to TestCrawler.page("Главная" to "текст", links = listOf("/a", "/b")),
+                "https://site.test/a" to TestCrawler.page("А" to "текст", canonical = "https://site.test/b"),
+                "https://site.test/b" to TestCrawler.page("Б" to "текст"),
+            ),
+        )
+
+        assertEquals(3, crawl(site).crawl().documents.size)
+    }
+
+    @Test
+    fun `нормализация оставляет только номер страницы списка и только если он больше нуля`() {
+        val crawler = SiteCrawler(InMemorySite(emptyMap()), TestCrawler.settings(paginationParameter = "page"))
+
+        assertEquals("https://site.test/news?page=3", crawler.normalize("https://site.test/news/?x=1&page=3#top"))
+        assertEquals("https://site.test/news", crawler.normalize("https://site.test/news?page=0"))
+        assertEquals("https://site.test/news", crawler.normalize("https://site.test/news?page=abc"))
+        assertEquals("https://site.test/news", crawler.normalize("https://site.test/news?other=2"))
+        assertEquals(
+            "https://site.test/news",
+            SiteCrawler(InMemorySite(emptyMap()), TestCrawler.settings()).normalize("https://site.test/news?page=3"),
+        )
     }
 
     @Test
