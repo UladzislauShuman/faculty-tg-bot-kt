@@ -6,6 +6,7 @@ import shuman.bsu.famcs.rag.knowledge.chunking.implementation.MarkdownHeaderSpli
 import shuman.bsu.famcs.rag.knowledge.chunking.implementation.ParentChildHtmlChunker
 import shuman.bsu.famcs.rag.knowledge.chunking.implementation.RecursiveCharacterSplitter
 import shuman.bsu.famcs.rag.knowledge.model.FetchedDocument
+import shuman.bsu.famcs.rag.knowledge.model.PageType
 import shuman.bsu.famcs.rag.testsupport.Parity
 import java.time.Instant
 import kotlin.test.assertEquals
@@ -117,5 +118,21 @@ class ParentSizeLimitTest {
     @Test
     fun `нулевой предел оставляет раздел целым`() {
         assertEquals(1, chunker(maxParentChars = 0).chunk(chronicle).parents.size)
+    }
+
+    @Test
+    fun `тип страницы берётся из класса body и адреса`() {
+        fun page(
+            bodyClass: String,
+            url: String,
+        ) = chunker(maxParentChars = 0).chunk(
+            chronicle.copy(url = url, body = chronicle.body.replace("<body>", "<body class=\"$bodyClass\">")),
+        )
+
+        assertEquals(PageType.LIST, page("path-taxonomy", "https://fpmi.bsu.by/announcement").pageType)
+        assertEquals(PageType.NEWS, page("path-node page-node-type-article", "https://fpmi.bsu.by/node/1635").pageType)
+        val history = page("path-node page-node-type-page", "https://fpmi.bsu.by/history-1997")
+        assertEquals(PageType.HISTORY, history.pageType)
+        assertEquals(1997, history.year)
     }
 }

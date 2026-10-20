@@ -59,7 +59,8 @@ class ParentChildHtmlChunker(
                 ChildChunk(id = stableId("${document.url}\n$text"), parentId = parent.id, text = text)
             }
         }
-        return ChunkedDocument(document.url, title, parents, children)
+        val kind = PageTypeResolver.resolve(document.url, page.body().className(), title)
+        return ChunkedDocument(document.url, title, parents, children, kind.type, kind.year)
     }
 
     /** Идентификатор из хеша содержимого: формат UUID подходит для идентификаторов точек Qdrant. */

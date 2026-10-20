@@ -47,6 +47,8 @@ data class TraceDto(
         val chars: Int,
         val matchedFragment: String,
         val selected: Boolean,
+        val pageType: String,
+        val weight: Double,
     )
 
     companion object {
@@ -55,7 +57,9 @@ data class TraceDto(
             route = trace.route,
             query = trace.query,
             passages = trace.passages.map { PassageDto(it.url, it.title, it.parentId, it.relevance, it.text) },
-            candidates = trace.candidates.map { CandidateDto(it.url, it.title, it.relevance, it.chars, it.matchedFragment, it.selected) },
+            candidates = trace.candidates.map {
+                CandidateDto(it.url, it.title, it.relevance, it.chars, it.matchedFragment, it.selected, it.pageType, it.weight)
+            },
             searchMs = trace.searchMs,
             rerankMs = trace.rerankMs,
             generationMs = trace.generationMs,

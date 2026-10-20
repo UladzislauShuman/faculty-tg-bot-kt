@@ -44,6 +44,23 @@ class AnswerGeneratorTest {
     }
 
     @Test
+    fun `при включённой подписи каждый раздел начинается с названия страницы и года`() = runTest {
+        val llm = ScriptedLlmClient.replying("Ответ")
+        val generator = LlmAnswerGenerator(llm, PromptLibrary(), "нет точной информации", passageHeader = true)
+        val dean = passage("Декан — Орлович").copy(title = "Деканат | Факультет прикладной математики", year = 2022)
+
+        generator.generate("Кто декан?", context, listOf(dean, passage("Без года")))
+
+        val text = llm.requests
+            .single()
+            .messages
+            .first()
+            .content
+        assertTrue("[Источник: Деканат, 2022]\nДекан — Орлович" in text)
+        assertTrue("[Источник: Страница]\nБез года" in text, "без года подпись без года")
+    }
+
+    @Test
     fun `фраза не нашёл из промпта распознаётся без учёта регистра и ё`() = runTest {
         val llm = ScriptedLlmClient.replying("К сожалению, в моей базе знаний пока НЕТ точной информации по этому вопросу.")
 

@@ -33,7 +33,7 @@ class IntentConfiguration {
         llm: LlmClient,
         prompts: PromptLibrary,
         properties: RagHandlerProperties,
-    ): AnswerGenerator = LlmAnswerGenerator(llm, prompts, properties.noInfoMarker)
+    ): AnswerGenerator = LlmAnswerGenerator(llm, prompts, properties.noInfoMarker, properties.passageHeader)
 
     /** Ветка RAG: поиск в базе знаний и ответ по найденным разделам. */
     @Bean

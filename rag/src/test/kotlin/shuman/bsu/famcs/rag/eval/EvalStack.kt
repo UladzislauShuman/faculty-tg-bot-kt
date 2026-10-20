@@ -9,6 +9,7 @@ import shuman.bsu.famcs.rag.knowledge.embedding.EmbeddingProvider
 import shuman.bsu.famcs.rag.knowledge.onnx.OnnxSession
 import shuman.bsu.famcs.rag.knowledge.rerank.Reranker
 import shuman.bsu.famcs.rag.knowledge.retrieval.KnowledgeRetriever
+import shuman.bsu.famcs.rag.knowledge.retrieval.RankingPolicy
 import shuman.bsu.famcs.rag.knowledge.sparse.Bm25SparseEncoder
 import shuman.bsu.famcs.rag.knowledge.store.KnowledgeBaseReader
 import shuman.bsu.famcs.rag.platform.runtime.AppDispatchers
@@ -21,7 +22,8 @@ import shuman.bsu.famcs.rag.platform.runtime.AppDispatchers
  * Нужны запущенный Qdrant на адресе из настроек (с проиндексированной базой) и файлы моделей в `models/`.
  */
 class EvalStack : AutoCloseable {
-    private val properties: KnowledgeProperties = EvalConfig.knowledge()
+    /** Настройки раздела `bot.knowledge` из `application.yaml`. */
+    val properties: KnowledgeProperties = EvalConfig.knowledge()
     private val config = KnowledgeConfiguration()
     private val dispatchers = AppDispatchers(cpu = Dispatchers.Default, database = Dispatchers.IO)
 
@@ -44,15 +46,30 @@ class EvalStack : AutoCloseable {
     /** Сколько разделов оставляет реранкер (`bot.knowledge.reranker.top-n`). */
     val topN: Int = properties.reranker.topN
 
-    /** Поиск целиком: гибридный поиск, родители, реранкер. */
-    val retriever = KnowledgeRetriever(
+    /**
+     * Поиск целиком: гибридный поиск, родители, реранкер. Поправки порядка и подача контекста реранкеру берутся из настроек,
+     * но их можно заменить, чтобы сравнить варианты на одном индексе.
+     *
+     * @param ranking поправка порядка по типу страницы и году.
+     * @param rerankWithContext подавать реранкеру название страницы и раздел.
+     */
+    fun retriever(
+        ranking: RankingPolicy = RankingPolicy(properties.ranking.typeWeights, properties.ranking.yearBoost),
+        rerankWithContext: Boolean = properties.ranking.rerankWithContext,
+        topN: Int = this.topN,
+    ) = KnowledgeRetriever(
         embeddings = embeddings,
         sparse = sparse,
         reader = reader,
         reranker = reranker,
-        topN = properties.reranker.topN,
+        topN = topN,
         meters = SimpleMeterRegistry(),
+        ranking = ranking,
+        rerankWithContext = rerankWithContext,
     )
+
+    /** Поиск с настройками из `application.yaml`. */
+    val retriever = retriever()
 
     override fun close() {
         client.close()

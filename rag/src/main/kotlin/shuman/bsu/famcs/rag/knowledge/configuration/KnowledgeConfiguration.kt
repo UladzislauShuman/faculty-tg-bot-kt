@@ -26,6 +26,7 @@ import shuman.bsu.famcs.rag.knowledge.onnx.OnnxSession
 import shuman.bsu.famcs.rag.knowledge.rerank.Reranker
 import shuman.bsu.famcs.rag.knowledge.rerank.implementation.OnnxCrossEncoderReranker
 import shuman.bsu.famcs.rag.knowledge.retrieval.KnowledgeRetriever
+import shuman.bsu.famcs.rag.knowledge.retrieval.RankingPolicy
 import shuman.bsu.famcs.rag.knowledge.source.DataSource
 import shuman.bsu.famcs.rag.knowledge.source.PageFetcher
 import shuman.bsu.famcs.rag.knowledge.source.implementation.HttpPageFetcher
@@ -182,6 +183,8 @@ class KnowledgeConfiguration {
         reranker = reranker.ifAvailable,
         topN = properties.reranker.topN,
         meters = meters,
+        ranking = RankingPolicy(properties.ranking.typeWeights, properties.ranking.yearBoost),
+        rerankWithContext = properties.ranking.rerankWithContext,
     )
 
     // --- Источники и индексация ---
@@ -246,7 +249,20 @@ class KnowledgeConfiguration {
         properties: KnowledgeProperties,
         clock: Clock,
         meters: MeterRegistry,
-    ) = Indexer(sources, chunkers, embeddings, sparse, writer, collections, documents, runs, properties.indexing, clock, meters)
+    ) = Indexer(
+        sources,
+        chunkers,
+        embeddings,
+        sparse,
+        writer,
+        collections,
+        documents,
+        runs,
+        properties.indexing,
+        clock,
+        meters,
+        properties.chunking.contextInSearchText,
+    )
 
     /** Фоновый запуск индексации: не больше одного запуска за раз, итог администраторам. */
     @Bean

@@ -10,4 +10,8 @@ class IndexedDocument(
     /** Номер версии (запуска индексации). По нему удаляются фрагменты прежней версии той же страницы. */
     val version: Long,
     val chunks: List<IndexedChunk>,
+    /** Тип страницы: хранится у каждого фрагмента и влияет на порядок выдачи. */
+    val pageType: PageType = PageType.SECTION,
+    /** Год страницы; `null`, если неизвестен. */
+    val year: Int? = null,
 )

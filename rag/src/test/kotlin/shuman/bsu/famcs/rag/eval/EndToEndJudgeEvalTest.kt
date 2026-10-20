@@ -53,12 +53,47 @@ class EndToEndJudgeEvalTest {
             }.map { mapper.readValue<E2eRow>(it) }
         val judge = LlmAnswerJudge(EvalLlm.client(), PromptLibrary())
 
+        // Оценки пишутся по одной в файл прогресса: при сбое (нехватка памяти, сон ноутбука) повторный запуск продолжает с того же места.
+        val progress = Path.of("build/reports/eval/e2e_judged_progress.jsonl")
+        val done: Map<Int, Map<String, String?>> = if (Files.exists(progress)) {
+            Files
+                .readAllLines(progress)
+                .filter {
+                    it.isNotBlank()
+                }.map { mapper.readValue<Map<String, String?>>(it) }
+                .associateBy { it.getValue("id")!!.toInt() }
+        } else {
+            emptyMap()
+        }
         val judged = rows.map { row ->
+            val saved = done[row.id]
             val answered = row.status == "ANSWERED" || row.status == "NO_INFO"
             val case = JudgeCase(row.question, row.answer, row.reference, row.passageTexts)
-            val correct = if (answered) judge.judge(JudgeCriterion.CORRECTNESS, case).verdict else Verdict.FAIL
-            val faithful = if (answered && row.passageTexts.isNotEmpty()) judge.judge(JudgeCriterion.FAITHFULNESS, case).verdict else null
-            val relevant = if (answered) judge.judge(JudgeCriterion.RELEVANCE, case).verdict else Verdict.FAIL
+            val correct = saved?.get("correct")?.let(Verdict::valueOf)
+                ?: if (answered) judge.judge(JudgeCriterion.CORRECTNESS, case).verdict else Verdict.FAIL
+            val faithful = if (saved != null) {
+                saved["faithful"]?.let(Verdict::valueOf)
+            } else if (answered && row.passageTexts.isNotEmpty()) {
+                judge.judge(JudgeCriterion.FAITHFULNESS, case).verdict
+            } else {
+                null
+            }
+            val relevant = saved?.get("relevant")?.let(Verdict::valueOf)
+                ?: if (answered) judge.judge(JudgeCriterion.RELEVANCE, case).verdict else Verdict.FAIL
+            if (saved == null) {
+                val line = mapOf(
+                    "id" to row.id.toString(),
+                    "correct" to correct.name,
+                    "faithful" to faithful?.name,
+                    "relevant" to relevant.name,
+                )
+                Files.writeString(
+                    progress,
+                    mapper.writeValueAsString(line) + "\n",
+                    java.nio.file.StandardOpenOption.CREATE,
+                    java.nio.file.StandardOpenOption.APPEND,
+                )
+            }
             Judged(
                 row,
                 correct,

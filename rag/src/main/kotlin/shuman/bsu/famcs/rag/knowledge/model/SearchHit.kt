@@ -14,4 +14,6 @@ data class SearchHit(
     val title: String,
     val headings: Map<String, String>,
     val indexedAt: Instant?,
+    val pageType: PageType = PageType.SECTION,
+    val year: Int? = null,
 )

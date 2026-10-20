@@ -33,6 +33,8 @@ data class PipelineResult(
                 it.parentChars,
                 it.matchedFragment,
                 it.selected,
+                it.pageType.name,
+                it.weight,
             )
         },
         searchMs = output.searchMillis,

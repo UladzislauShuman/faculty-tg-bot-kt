@@ -11,6 +11,8 @@ package shuman.bsu.famcs.rag.knowledge.model
  * @property parentChars длина раздела в символах (ровно столько уходит в промпт, если раздел выбран).
  * @property matchedFragment начало мелкого фрагмента, по которому раздел нашёлся.
  * @property selected раздел вошёл в итоговую выдачу.
+ * @property pageType тип страницы.
+ * @property weight множитель порядка выдачи по типу страницы и году вопроса (1 — без поправки).
  */
 data class RetrievedCandidate(
     val parentId: String,
@@ -20,4 +22,6 @@ data class RetrievedCandidate(
     val parentChars: Int,
     val matchedFragment: String,
     val selected: Boolean,
+    val pageType: PageType = PageType.SECTION,
+    val weight: Double = 1.0,
 )

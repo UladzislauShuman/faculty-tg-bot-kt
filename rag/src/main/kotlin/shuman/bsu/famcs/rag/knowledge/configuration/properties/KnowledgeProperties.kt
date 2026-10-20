@@ -12,6 +12,7 @@ import jakarta.validation.constraints.Positive
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.core.io.Resource
 import org.springframework.validation.annotation.Validated
+import shuman.bsu.famcs.rag.knowledge.model.PageType
 import shuman.bsu.famcs.rag.knowledge.rerank.Reranker
 import java.nio.file.Path
 import java.time.Duration
@@ -28,6 +29,7 @@ data class KnowledgeProperties(
     @field:Valid val sparse: Sparse,
     @field:Valid val search: Search,
     @field:Valid val reranker: Reranker,
+    @field:Valid val ranking: Ranking,
     @field:Valid val qdrant: Qdrant,
     @field:Valid val crawler: Crawler,
     @field:Valid val indexing: Indexing,
@@ -47,6 +49,11 @@ data class KnowledgeProperties(
          * на тестовом наборе не ухудшил поиск, но сократил промпт втрое.
          */
         @field:Min(0) val parentMaxChars: Int,
+        /**
+         * Приписывать к тексту фрагмента перед расчётом векторов название страницы и заголовок раздела («История 1997. Раздел: Хроника»).
+         * Фрагмент в 300 знаков иначе не знает, из какой он страницы. В ответ идёт чистый текст. Смена значения требует полной переиндексации.
+         */
+        val contextInSearchText: Boolean,
         /** CSS-селекторы блока с основным содержимым страницы по порядку приоритета. */
         @field:NotEmpty val contentSelectors: List<String>,
         /** Теги, которые вырезаются из блока: скрипты, формы, навигация, шапка, подвал. */
@@ -133,6 +140,18 @@ data class KnowledgeProperties(
         @field:Positive val topN: Int,
     )
 
+    data class Ranking(
+        /**
+         * Множители оценки реранкера по типу страницы (`LIST`, `HISTORY`, `NEWS`, `EVENT`…). Не указанный тип — 1. Основные разделы
+         * не должны уступать перечням и хроникам: перечень заголовков новостей даёт совпадение слов, но не ответ.
+         */
+        val typeWeights: Map<PageType, Double> = emptyMap(),
+        /** Во сколько раз повышается оценка страницы, год которой назван в вопросе («кто был деканом в 2010»). 1 — без повышения. */
+        @field:DecimalMin("1.0") val yearBoost: Double,
+        /** Подавать реранкеру название страницы и заголовок раздела вместе с текстом раздела. */
+        val rerankWithContext: Boolean,
+    )
+
     data class Qdrant(
         @field:NotBlank val host: String,
         /** Порт gRPC (не REST). У Qdrant по умолчанию 6334. */
@@ -202,5 +221,10 @@ data class KnowledgeProperties(
         @field:DecimalMin("0.0") @field:DecimalMax("1.0") val maxFailedShare: Double,
         /** Если страниц найдено меньше этой доли от прошлого раза, обновление не применяется (сайт мог упасть). */
         @field:DecimalMin("0.0") @field:DecimalMax("1.0") val minPagesShareOfPrevious: Double,
+        /**
+         * Версия схемы индекса: входит в хеш страницы. Изменили то, что не видно в тексте страницы (модель эмбеддингов, контекст
+         * фрагмента, набор полей), — поменяйте строку, и все страницы пересчитаются при ближайшей индексации.
+         */
+        val schemaVersion: String,
     )
 }

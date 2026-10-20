@@ -13,4 +13,7 @@ data class RetrievedPassage(
     val indexedAt: Instant?,
     /** Оценка реранкера от 0 до 1. `null`, если реранкер выключен. */
     val relevance: Double?,
+    val pageType: PageType = PageType.SECTION,
+    /** Год страницы; попадает в подпись раздела в промпте. */
+    val year: Int? = null,
 )

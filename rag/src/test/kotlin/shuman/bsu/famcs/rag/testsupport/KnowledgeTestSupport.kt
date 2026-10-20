@@ -3,6 +3,7 @@ package shuman.bsu.famcs.rag.testsupport
 import shuman.bsu.famcs.rag.knowledge.configuration.properties.KnowledgeProperties
 import shuman.bsu.famcs.rag.knowledge.model.IndexedChunk
 import shuman.bsu.famcs.rag.knowledge.model.IndexedDocument
+import shuman.bsu.famcs.rag.knowledge.model.PageType
 import shuman.bsu.famcs.rag.knowledge.model.SparseVector
 import java.time.Duration
 import java.time.Instant
@@ -70,11 +71,15 @@ object TestKnowledge {
         url: String,
         version: Long,
         vararg chunks: IndexedChunk,
+        pageType: PageType = PageType.SECTION,
+        year: Int? = null,
     ) = IndexedDocument(
         url = url,
         title = "Страница $url",
         indexedAt = Instant.parse("2026-10-08T03:00:00Z"),
         version = version,
         chunks = chunks.toList(),
+        pageType = pageType,
+        year = year,
     )
 }

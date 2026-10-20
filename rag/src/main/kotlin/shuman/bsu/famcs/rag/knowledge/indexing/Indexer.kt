@@ -9,6 +9,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import shuman.bsu.famcs.rag.knowledge.chunking.ChunkContext
 import shuman.bsu.famcs.rag.knowledge.chunking.Chunker
 import shuman.bsu.famcs.rag.knowledge.configuration.properties.KnowledgeProperties
 import shuman.bsu.famcs.rag.knowledge.embedding.EmbeddingProvider
@@ -58,6 +59,8 @@ class Indexer(
     private val settings: KnowledgeProperties.Indexing,
     private val clock: Clock,
     private val meters: MeterRegistry,
+    /** Приписывать название страницы и раздела к тексту фрагмента перед расчётом векторов (контекст фрагмента). */
+    private val contextInSearchText: Boolean = false,
 ) : IndexRunner {
     private enum class PageOutcome { CHANGED, UNCHANGED, SKIPPED, FAILED }
 
@@ -241,7 +244,12 @@ class Indexer(
         chunked: ChunkedDocument,
         version: Long,
     ): IndexedDocument {
-        val dense = embeddings.embedDocuments(chunked.children.map { it.text })
+        // Для поиска к фрагменту приписывается контекст страницы, в данных и в ответе остаётся чистый текст.
+        val searchTexts = chunked.children.map { child ->
+            val parent = requireNotNull(chunked.parentOf(child)) { "У фрагмента ${child.id} нет родителя" }
+            if (contextInSearchText) ChunkContext.searchText(chunked.title, parent.headings, child.text) else child.text
+        }
+        val dense = embeddings.embedDocuments(searchTexts)
         val chunks = chunked.children.mapIndexed { index, child ->
             val parent = requireNotNull(chunked.parentOf(child)) { "У фрагмента ${child.id} нет родителя" }
             IndexedChunk(
@@ -251,10 +259,10 @@ class Indexer(
                 parentText = parent.text,
                 headings = parent.headings,
                 dense = dense[index],
-                sparse = sparse.encodeDocument(child.text),
+                sparse = sparse.encodeDocument(searchTexts[index]),
             )
         }
-        return IndexedDocument(chunked.url, chunked.title, clock.instant(), version, chunks)
+        return IndexedDocument(chunked.url, chunked.title, clock.instant(), version, chunks, chunked.pageType, chunked.year)
     }
 
     /**
@@ -319,6 +327,9 @@ class Indexer(
      */
     private fun contentHash(chunked: ChunkedDocument): String {
         val digest = MessageDigest.getInstance("SHA-256")
+        // Версия схемы и тип страницы входят в хеш: смена того, чего нет в тексте страницы, тоже требует пересчёта.
+        digest.update(settings.schemaVersion.toByteArray(Charsets.UTF_8))
+        digest.update(chunked.pageType.name.toByteArray(Charsets.UTF_8))
         digest.update(chunked.title.toByteArray(Charsets.UTF_8))
         chunked.parents.forEach { parent ->
             digest.update(0)

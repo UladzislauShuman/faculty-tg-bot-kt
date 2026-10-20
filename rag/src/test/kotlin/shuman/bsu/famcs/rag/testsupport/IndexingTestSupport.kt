@@ -77,10 +77,14 @@ class StaticDataSource(
 class HashEmbeddingProvider(override val dimension: Int = TestKnowledge.DIMENSION) : EmbeddingProvider {
     var documentCalls = 0
 
+    /** Все тексты, которые были отправлены на расчёт векторов, в порядке вызова. */
+    val embeddedTexts = mutableListOf<String>()
+
     override suspend fun embedQuery(text: String) = vector(text)
 
     override suspend fun embedDocuments(texts: List<String>): List<FloatArray> {
         documentCalls++
+        embeddedTexts += texts
         return texts.map(::vector)
     }
 
@@ -216,6 +220,7 @@ object TestCrawler {
         parallelPages = 2,
         maxFailedShare = 0.2,
         minPagesShareOfPrevious = 0.5,
+        schemaVersion = "test",
     )
 
     /** Страница в формате сайта факультета: основное содержимое в `div#block-famcs-content`. */

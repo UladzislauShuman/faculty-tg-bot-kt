@@ -16,4 +16,9 @@ data class RagHandlerProperties(
     @field:NotBlank val noInfoMarker: String,
     /** Сколько источников показывать под ответом. */
     @field:Positive val maxSources: Int,
+    /**
+     * Подписывать каждый раздел в промпте: «[Источник: название страницы, год]». Модель видит, из какой страницы и какого года
+     * текст, и при противоречии может выбрать более новый. Без подписи разделы склеены без указания источника.
+     */
+    val passageHeader: Boolean = false,
 )
