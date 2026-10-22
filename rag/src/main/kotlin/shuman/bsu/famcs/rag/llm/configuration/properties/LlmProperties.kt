@@ -49,6 +49,16 @@ data class LlmProperties(
         @field:Positive val maxConcurrentCalls: Int,
         /** Дополнительные заголовки (например, идентификатор каталога Yandex Cloud). Не заданы — заголовков нет. */
         val headers: Map<String, String> = emptyMap(),
+        /**
+         * Дополнительные поля тела запроса к OpenAI-совместимому провайдеру. Нужны для параметров, которых нет в стандарте:
+         * у DeepSeek режим рассуждений включён по умолчанию, и его отключает `thinking: { type: disabled }`; без этого скрытые
+         * рассуждения многократно увеличивают число выходных токенов. Не заданы — тело запроса стандартное. Для Ollama не используется.
+         *
+         * Значение — литерал JSON в строке: `"false"`, `"5"`, `'{"type":"disabled"}'`; не разбирается как JSON — остаётся строкой.
+         * Ключ с подчёркиванием пишется в квадратных скобках (`"[enable_thinking]"`): иначе Spring убирает из имени знаки препинания.
+         * Значения типа `Any` Spring Boot с проверкой настроек не связывает (ошибка «validationType must not be null»), поэтому строки.
+         */
+        val requestBody: Map<String, String> = emptyMap(),
         /** Параметры, которые есть только у Ollama. Обязательны при `type: OLLAMA`. */
         @field:Valid val ollama: OllamaProperties?,
     ) {

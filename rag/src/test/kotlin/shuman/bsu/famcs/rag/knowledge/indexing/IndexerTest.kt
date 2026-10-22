@@ -7,6 +7,7 @@ import shuman.bsu.famcs.rag.knowledge.chunking.implementation.HtmlToMarkdown
 import shuman.bsu.famcs.rag.knowledge.chunking.implementation.MarkdownHeaderSplitter
 import shuman.bsu.famcs.rag.knowledge.chunking.implementation.ParentChildHtmlChunker
 import shuman.bsu.famcs.rag.knowledge.chunking.implementation.RecursiveCharacterSplitter
+import shuman.bsu.famcs.rag.knowledge.configuration.properties.KnowledgeProperties
 import shuman.bsu.famcs.rag.knowledge.model.IndexMode
 import shuman.bsu.famcs.rag.knowledge.model.IndexRunStatus
 import shuman.bsu.famcs.rag.knowledge.sparse.Bm25SparseEncoder
@@ -34,7 +35,10 @@ class IndexerTest {
     private val embeddings = HashEmbeddingProvider()
     private val activeUrls = urls.toMutableList()
 
-    private val indexer = Indexer(
+    private fun newIndexer(
+        settings: KnowledgeProperties.Indexing = TestCrawler.indexing,
+        contextInSearchText: Boolean = false,
+    ) = Indexer(
         sources = listOf(StaticDataSource(site) { activeUrls.toList() }),
         chunkers = listOf(
             ParentChildHtmlChunker(
@@ -51,10 +55,13 @@ class IndexerTest {
         collections = collections,
         documents = documents,
         runs = runs,
-        settings = TestCrawler.indexing,
+        settings = settings,
         clock = MutableClock(),
         meters = SimpleMeterRegistry(),
+        contextInSearchText = contextInSearchText,
     )
+
+    private val indexer = newIndexer()
 
     @Test
     fun `первый запуск создаёт активную коллекцию и записывает все страницы`() = runTest {
@@ -73,6 +80,32 @@ class IndexerTest {
                 .version,
             "версия данных равна номеру запуска",
         )
+    }
+
+    @Test
+    fun `с контекстом в тексте для поиска векторы считаются по названию страницы и разделу, а в данных остаётся чистый текст`() = runTest {
+        newIndexer(contextInSearchText = true).run(IndexMode.INCREMENTAL)
+
+        assertTrue(
+            embeddings.embeddedTexts.all {
+                it.startsWith("Страница. Раздел: Раздел\n")
+            },
+            "контекст перед текстом: ${embeddings.embeddedTexts}",
+        )
+        val stored = writer.documents
+            .getValue("collection-1")
+            .getValue(urls[0])
+            .chunks
+        assertTrue(stored.none { "Раздел:" in it.text }, "в данных фрагмента чистый текст без контекста")
+    }
+
+    @Test
+    fun `смена версии схемы индекса заставляет пересчитать страницы, даже если текст не менялся`() = runTest {
+        newIndexer().run(IndexMode.INCREMENTAL)
+
+        val report = newIndexer(TestCrawler.indexing.copy(schemaVersion = "v2")).run(IndexMode.INCREMENTAL)
+
+        assertEquals(3, report.counters.changed, "все страницы пересчитаны")
     }
 
     @Test

@@ -53,6 +53,8 @@ RAG-бот для Telegram: отвечает студентам и абитур�
 | Вход в систему | `api/RagService` → `assistant/pipeline/service/implementation/RagServiceImpl` |
 | Порядок шагов одного вопроса | `assistant/pipeline/service/AnswerPipeline` |
 | Ветка с поиском по базе знаний | `assistant/intent/handler/implementation/RagHandler` → `knowledge/retrieval/KnowledgeRetriever` |
+| Генерация ответа по найденным разделам (отдельно от поиска) | `assistant/intent/generator/implementation/LlmAnswerGenerator` |
+| Трасса ответа (ветка, запрос поиска, найденные разделы, модель, токены) | `api/model/AnswerTrace`; в HTTP-входе `POST /api/v1/ask?trace=true` |
 | Обновление базы знаний | `knowledge/indexing/Indexer` (запуск: `knowledge/indexing/job`) |
 | Кто кого получает | `assistant/configuration/*Configuration`, `knowledge/configuration`, `llm/configuration` |
 
@@ -95,6 +97,21 @@ curl -s -X POST localhost:8080/api/v1/ask -H 'Content-Type: application/json' -H
 
 Секреты читаются только из окружения (`.env.example`). Telegram включается `BOT_TELEGRAM_ENABLED=true` и `BOT_TELEGRAM_TOKEN`.
 
+### Как включить Qwen
+
+Профиль готов (`src/main/resources/application-qwen.yaml`): рассуждения отключены (`enable_thinking: false`), все роли и судья идут на Qwen, адрес по умолчанию — международный регион.
+
+| Шаг | Что сделать |
+|---|---|
+| 1 | В консоли Alibaba Cloud Model Studio создайте ключ (раздел API Key) и посмотрите точное имя модели |
+| 2 | Положите ключ в окружение: `QWEN_API_KEY=sk-…` (в `.env` рядом с `docker-compose.yml` или `export` в терминале). В git ключ не попадает |
+| 3 | Имя модели: `QWEN_MODEL=<имя из консоли>` (по умолчанию `qwen-plus`). Для судьи лучше другая модель: `QWEN_JUDGE_MODEL=<имя>` |
+| 4 | Если консоль дала адрес рабочего пространства (`https://<WorkspaceId>.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`), задайте `QWEN_BASE_URL` |
+| 5 | Запуск: `BOT_PROFILES=docker,qwen docker compose up -d` или `SPRING_PROFILES_ACTIVE=qwen ./gradlew bootRun` |
+| 6 | Проверки качества на Qwen: `./gradlew evalTest --tests '*EndToEndJudgeEvalTest' -Peval.profile=qwen` (судья пойдёт на Qwen) |
+
+Без `QWEN_API_KEY` при включённом профиле бот не запускается с ошибкой «нужен ключ API: bot.llm.providers.qwen.api-key». Ключ региона Сингапур не работает с адресом Китая (401).
+
 ## Конфиг
 
 Все параметры в `src/main/resources/application.yaml`, у каждого подпись. Пометка `[паритет]` — значение совпадает с Python-версией, менять только после замера. Значения, влияющие на деньги и безопасность: `bot.limits`, `bot.llm.roles`, `bot.retention`.
@@ -106,6 +123,7 @@ curl -s -X POST localhost:8080/api/v1/ask -H 'Content-Type: application/json' -H
 | `./gradlew build` | Форматирование (ktlint), компиляция без предупреждений, юнит-тесты (быстрые, без сети) |
 | `./gradlew integrationTest` | PostgreSQL и Qdrant в контейнерах (нужен Docker), сборка всего контекста приложения |
 | `./gradlew modelTest` | Паритет моделей ONNX с Python (нужны файлы из `models/`) |
+| `./gradlew evalTest` | Качество поиска на наборе вопросов `eval/qa-set.yaml` (нужны Qdrant с индексом и файлы моделей). Отчёт: `build/reports/eval/retrieval.md` |
 
 ## Команды бота
 

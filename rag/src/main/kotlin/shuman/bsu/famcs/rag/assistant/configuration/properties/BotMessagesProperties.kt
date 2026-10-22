@@ -41,6 +41,8 @@ data class BotMessagesProperties(
     @field:NotBlank val maintenance: String,
     /** Заголовок списка источников. */
     @field:NotBlank val sourcesTitle: String,
+    /** Заголовок списка близких страниц под ответом «не нашёл»: пользователь может поискать сам. */
+    @field:NotBlank val suggestionsTitle: String = "Возможно, поможет:",
     /** Пометка даты проверки у источника. Метка `{date}` — дата в формате ДД.ММ.ГГГГ. */
     @field:NotBlank val checkedOn: String,
     /** Предупреждение к ответам, где есть даты, сроки, суммы. */

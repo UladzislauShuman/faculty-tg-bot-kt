@@ -59,7 +59,10 @@ class OpenAiCompatibleWireTest {
         server?.stop(0)
     }
 
-    private fun provider(baseUrl: String): ChatModelProvider {
+    private fun provider(
+        baseUrl: String,
+        requestBody: Map<String, String> = emptyMap(),
+    ): ChatModelProvider {
         val properties = LlmProperties.ProviderProperties(
             type = LlmProperties.ProviderType.OPENAI_COMPATIBLE,
             baseUrl = baseUrl,
@@ -68,6 +71,7 @@ class OpenAiCompatibleWireTest {
             httpTimeout = Duration.ofSeconds(5),
             maxConcurrentCalls = 1,
             headers = mapOf("x-folder-id" to "folder-42"),
+            requestBody = requestBody,
             ollama = null,
         )
         return ChatModelProvider("yandex", ChatModelFactory.create("yandex", properties))
@@ -118,6 +122,26 @@ class OpenAiCompatibleWireTest {
         assertEquals(1, limitField.size, "ровно одно поле лимита ответа: $limitField")
         assertEquals("max_tokens", limitField.single(), "LangChain4j 1.15 отправляет max_tokens")
         assertEquals(77, body.get(limitField.single()).intValue())
+    }
+
+    @Test
+    fun `дополнительные поля тела запроса уходят провайдеру, в том числе вложенные`() = runTest {
+        val extra = mapOf("thinking" to """{"type":"disabled"}""", "enable_thinking" to "false", "seed" to "7", "note" to "текст")
+
+        provider(startServer { 200 to okBody }, requestBody = extra).chat(call)
+
+        val body = json.readTree(captured.single().body)
+        assertEquals("disabled", body.get("thinking").get("type").asString(), "отключение рассуждений DeepSeek дошло до сервера")
+        assertEquals(false, body.get("enable_thinking").booleanValue(), "булево значение осталось булевым, а не строкой")
+        assertEquals(7, body.get("seed").intValue())
+        assertEquals("текст", body.get("note").asString(), "не JSON остаётся строкой")
+    }
+
+    @Test
+    fun `без дополнительных полей тело запроса стандартное`() = runTest {
+        provider(startServer { 200 to okBody }).chat(call)
+
+        assertTrue(!json.readTree(captured.single().body).has("thinking"))
     }
 
     @Test

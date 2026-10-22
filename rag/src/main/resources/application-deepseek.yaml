@@ -16,6 +16,11 @@ bot:
         http-timeout: 60s
         # Лимит одновременных запросов у DeepSeek 2500 (прочитано); берём малую долю: бот работает на одном процессоре.
         max-concurrent-calls: 8
+        # Режим рассуждений DeepSeek включён по умолчанию: скрытые рассуждения многократно увеличивают выходные токены и задержку.
+        # Для справочного бота они не нужны, поэтому отключаются полем тела запроса (прочитано в документации DeepSeek 2026-10-16).
+        # Значение — литерал JSON в строке (см. LlmProperties.ProviderProperties.requestBody).
+        request-body:
+          thinking: '{"type":"disabled"}'
     roles:
       classifier:
         call-timeout: 15s

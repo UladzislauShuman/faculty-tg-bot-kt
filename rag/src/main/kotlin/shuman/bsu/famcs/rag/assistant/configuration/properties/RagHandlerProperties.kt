@@ -1,5 +1,7 @@
 package shuman.bsu.famcs.rag.assistant.configuration.properties
 
+import jakarta.validation.constraints.DecimalMin
+import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Positive
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -16,4 +18,13 @@ data class RagHandlerProperties(
     @field:NotBlank val noInfoMarker: String,
     /** Сколько источников показывать под ответом. */
     @field:Positive val maxSources: Int,
+    /**
+     * Подписывать каждый раздел в промпте: «[Источник: название страницы, год]». Модель видит, из какой страницы и какого года
+     * текст, и при противоречии может выбрать более новый. Без подписи разделы склеены без указания источника.
+     */
+    val passageHeader: Boolean = false,
+    /** Сколько близких страниц предлагать под ответом «не нашёл». 0 — не предлагать. */
+    @field:Min(0) val maxSuggestions: Int = 0,
+    /** Наименьшая оценка реранкера (с поправкой по типу страницы), при которой страница предлагается. Мусорные оценки около 0,01. */
+    @field:DecimalMin("0.0") val suggestionMinScore: Double = 0.0,
 )

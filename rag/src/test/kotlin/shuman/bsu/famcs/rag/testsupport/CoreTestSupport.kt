@@ -20,6 +20,7 @@ import shuman.bsu.famcs.rag.assistant.feedback.repository.AnswerLogRepository
 import shuman.bsu.famcs.rag.assistant.intent.classifier.GreetingMatcher
 import shuman.bsu.famcs.rag.assistant.intent.classifier.IntentClassifier
 import shuman.bsu.famcs.rag.assistant.intent.classifier.implementation.LlmIntentClassifier
+import shuman.bsu.famcs.rag.assistant.intent.generator.implementation.LlmAnswerGenerator
 import shuman.bsu.famcs.rag.assistant.intent.handler.implementation.ChatHandler
 import shuman.bsu.famcs.rag.assistant.intent.handler.implementation.RagHandler
 import shuman.bsu.famcs.rag.assistant.intent.handler.implementation.ScheduleLinkHandler
@@ -273,7 +274,13 @@ class RagHarness(
         rewriter = rewriter,
         classifier = classifier ?: LlmIntentClassifier(llm, prompts, GreetingMatcher()),
         handlers = listOf(
-            RagHandler(retriever, llm, prompts, TestRag.rag, TestRag.messages.noInfo, clock.zone),
+            RagHandler(
+                retriever,
+                LlmAnswerGenerator(llm, prompts, TestRag.rag.noInfoMarker),
+                TestRag.rag,
+                TestRag.messages.noInfo,
+                clock.zone,
+            ),
             ChatHandler(Intent.SMALLTALK, "smalltalk-system", llm, prompts),
             ChatHandler(Intent.GENERAL, "general-system", llm, prompts),
             ScheduleLinkHandler(TestRag.messages.schedule),

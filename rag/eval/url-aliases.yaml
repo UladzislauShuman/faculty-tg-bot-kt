@@ -1,0 +1,20 @@
+# Страницы сайта с несколькими адресами: адрес-алиас → канонический адрес (из <link rel="canonical">, обход 2026-10-18).
+# Бот хранит канонический адрес, поэтому эталон набора вопросов приводится к нему (QaSetLoader). Файл дополняйте при появлении новых алиасов.
+
+https://fpmi.bsu.by/faculty: https://fpmi.bsu.by/faculty-units
+https://fpmi.bsu.by/conferences: https://fpmi.bsu.by/conferences-archive-table
+https://fpmi.bsu.by/home: https://fpmi.bsu.by/node/1636
+https://fpmi.bsu.by/enrollee: https://fpmi.bsu.by/Admissions-campaign
+https://fpmi.bsu.by/educational-process: https://fpmi.bsu.by/student
+https://fpmi.bsu.by/olympiads: https://fpmi.bsu.by/olympiads-informatika
+https://fpmi.bsu.by/node/1613: https://fpmi.bsu.by/kafedra-DMA
+https://fpmi.bsu.by/node/1616: https://fpmi.bsu.by/SRL-PVA-public
+https://fpmi.bsu.by/node/1543: https://fpmi.bsu.by/history-ICPC
+https://fpmi.bsu.by/node/1541: https://fpmi.bsu.by/world-programming-championship
+https://fpmi.bsu.by/node/1542: https://fpmi.bsu.by/world-championship-victories
+https://fpmi.bsu.by/node/1653: https://fpmi.bsu.by/Specialties-and-levels-of-education
+https://fpmi.bsu.by/node/1655: https://fpmi.bsu.by/Principles-and-disciplines-of-learning
+https://fpmi.bsu.by/node/1547: https://fpmi.bsu.by/results-olympiad-mathematics-2025
+https://fpmi.bsu.by/node/1546: https://fpmi.bsu.by/international-mathematical-olympiads-2023-2024
+https://fpmi.bsu.by/node/1544: https://fpmi.bsu.by/international-olympiad-IT-Planet
+https://fpmi.bsu.by/node/1545: https://fpmi.bsu.by/International-tournament-games-of-the-future-2024

@@ -12,6 +12,7 @@ import jakarta.validation.constraints.Positive
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.core.io.Resource
 import org.springframework.validation.annotation.Validated
+import shuman.bsu.famcs.rag.knowledge.model.PageType
 import shuman.bsu.famcs.rag.knowledge.rerank.Reranker
 import java.nio.file.Path
 import java.time.Duration
@@ -28,6 +29,7 @@ data class KnowledgeProperties(
     @field:Valid val sparse: Sparse,
     @field:Valid val search: Search,
     @field:Valid val reranker: Reranker,
+    @field:Valid val ranking: Ranking,
     @field:Valid val qdrant: Qdrant,
     @field:Valid val crawler: Crawler,
     @field:Valid val indexing: Indexing,
@@ -41,6 +43,24 @@ data class KnowledgeProperties(
         @field:NotEmpty val childSeparators: List<String>,
         /** Заголовки до какого уровня делят страницу на родительские разделы (3 — `#`, `##`, `###`). */
         @field:Min(1) @field:Max(6) val headerLevels: Int,
+        /**
+         * Предельный размер родительского раздела, символы. Длиннее — делится на окна по абзацам. 0 — без ограничения (как в Python,
+         * где аналогичная настройка `parent_chunk_size` не работает). Реранкер читает около 1500–2000 знаков, и родитель до 1500
+         * на тестовом наборе не ухудшил поиск, но сократил промпт втрое.
+         */
+        @field:Min(0) val parentMaxChars: Int,
+        /**
+         * Приписывать к тексту фрагмента перед расчётом векторов название страницы и заголовок раздела («История 1997. Раздел: Хроника»).
+         * Фрагмент в 300 знаков иначе не знает, из какой он страницы. В ответ идёт чистый текст. Смена значения требует полной переиндексации.
+         */
+        val contextInSearchText: Boolean,
+        /** Превращать таблицы в строки «колонка: значение; колонка: значение», чтобы каждая строка была самостоятельным фрагментом. */
+        val tablesAsRows: Boolean,
+        /**
+         * Страница, весь текст которой не длиннее этого значения, становится одним родителем (в промпт идёт вся страница, а не раздел).
+         * Страницы факультета короткие (3–4 тыс. знаков), и общий вопрос отвечается ими полнее. 0 — отключено.
+         */
+        @field:Min(0) val wholePageMaxChars: Int,
         /** CSS-селекторы блока с основным содержимым страницы по порядку приоритета. */
         @field:NotEmpty val contentSelectors: List<String>,
         /** Теги, которые вырезаются из блока: скрипты, формы, навигация, шапка, подвал. */
@@ -127,6 +147,23 @@ data class KnowledgeProperties(
         @field:Positive val topN: Int,
     )
 
+    data class Ranking(
+        /**
+         * Множители оценки реранкера по типу страницы (`LIST`, `HISTORY`, `NEWS`, `EVENT`…). Не указанный тип — 1. Основные разделы
+         * не должны уступать перечням и хроникам: перечень заголовков новостей даёт совпадение слов, но не ответ.
+         */
+        val typeWeights: Map<PageType, Double> = emptyMap(),
+        /** Во сколько раз повышается оценка страницы, год которой назван в вопросе («кто был деканом в 2010»). 1 — без повышения. */
+        @field:DecimalMin("1.0") val yearBoost: Double,
+        /** Подавать реранкеру название страницы и заголовок раздела вместе с текстом раздела. */
+        val rerankWithContext: Boolean,
+        /**
+         * Множитель для страниц-«сирот»: найдены перебором номеров (`/node/N`), а не по ссылкам. На них не ведёт меню,
+         * часть может быть устаревшей, поэтому они немного уступают связанным страницам. 1 — без понижения.
+         */
+        @field:DecimalMin("0.0") val orphanWeight: Double = 1.0,
+    )
+
     data class Qdrant(
         @field:NotBlank val host: String,
         /** Порт gRPC (не REST). У Qdrant по умолчанию 6334. */
@@ -170,8 +207,40 @@ data class KnowledgeProperties(
         val excludedPathParts: List<String>,
         /** Читать `robots.txt` и не заходить в запрещённые разделы. */
         val respectRobotsTxt: Boolean,
+        /**
+         * Имя параметра запроса, которым сайт листает списки (у сайта факультета `page`: `/announcement?page=3`). Такие адреса
+         * обходятся ради ссылок на новости, но сами как документы не сохраняются. Пустая строка — параметры запроса отбрасываются.
+         */
+        val paginationParameter: String,
+        /**
+         * Склеивать страницы, доступные по нескольким адресам, по каноническому адресу страницы (`<link rel="canonical">`):
+         * в базу идёт одна копия, а адресом источника становится канонический. Без этого `/enrollee` и `/Admissions-campaign`
+         * (одна и та же страница) попадали в выдачу двумя копиями.
+         */
+        val useCanonicalUrl: Boolean,
         /** Дополнительные доверенные сертификаты (PEM), `classpath:` или `file:`. Нужны, если сайт отдаёт неполную цепочку сертификатов. */
         val extraCertificates: List<Resource>,
+        /** Перебор номеров страниц после обхода по ссылкам: находит страницы, на которые не ведёт ни одна ссылка. */
+        val nodeScan: NodeScan = NodeScan(),
+    )
+
+    /**
+     * Перебор страниц по номеру (`/node/1`, `/node/2`, …). У Drupal каждая страница открывается по номеру, адрес-псевдоним получается
+     * перенаправлением. Так находятся страницы-«сироты»: на сайте факультета правила приёма в магистратуру 2026 года лежат на страницах,
+     * на которые не ссылается ни меню, ни раздел «Магистранту». Номера уже обойдённых страниц берутся из `<link rel="shortlink">`
+     * и повторно не скачиваются.
+     */
+    data class NodeScan(
+        /** Включить перебор. */
+        val enabled: Boolean = false,
+        /** Путь перед номером страницы. */
+        @field:NotBlank val pathPrefix: String = "/node/",
+        /** Первый номер. */
+        @field:Positive val firstId: Int = 1,
+        /** Перебор останавливается после стольких подряд несуществующих номеров (404, 403 у неопубликованных). */
+        @field:Positive val maxConsecutiveMissing: Int = 100,
+        /** Предохранитель: номер, дальше которого перебор не идёт. */
+        @field:Positive val maxId: Int = 20000,
     )
 
     data class Indexing(
@@ -185,5 +254,10 @@ data class KnowledgeProperties(
         @field:DecimalMin("0.0") @field:DecimalMax("1.0") val maxFailedShare: Double,
         /** Если страниц найдено меньше этой доли от прошлого раза, обновление не применяется (сайт мог упасть). */
         @field:DecimalMin("0.0") @field:DecimalMax("1.0") val minPagesShareOfPrevious: Double,
+        /**
+         * Версия схемы индекса: входит в хеш страницы. Изменили то, что не видно в тексте страницы (модель эмбеддингов, контекст
+         * фрагмента, набор полей), — поменяйте строку, и все страницы пересчитаются при ближайшей индексации.
+         */
+        val schemaVersion: String,
     )
 }

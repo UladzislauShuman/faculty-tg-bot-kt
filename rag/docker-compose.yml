@@ -55,8 +55,9 @@ services:
       # Профили deepseek и qwen: пустой ключ при выбранном профиле останавливает запуск (проверка в ChatModelFactory).
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       QWEN_API_KEY: ${QWEN_API_KEY:-}
-      QWEN_BASE_URL: ${QWEN_BASE_URL:-}
+      QWEN_BASE_URL: ${QWEN_BASE_URL:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
       QWEN_MODEL: ${QWEN_MODEL:-qwen-plus}
+      QWEN_JUDGE_MODEL: ${QWEN_JUDGE_MODEL:-${QWEN_MODEL:-qwen-plus}}
       BOT_HTTP_API_KEY: ${BOT_HTTP_API_KEY:-}
       # Telegram и HTTP-вход включаются отдельными флагами: без токена бот запускается и отвечает только на пробах здоровья.
       BOT_TELEGRAM_ENABLED: ${BOT_TELEGRAM_ENABLED:-false}

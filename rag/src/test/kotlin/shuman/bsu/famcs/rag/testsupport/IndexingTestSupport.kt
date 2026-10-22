@@ -77,10 +77,14 @@ class StaticDataSource(
 class HashEmbeddingProvider(override val dimension: Int = TestKnowledge.DIMENSION) : EmbeddingProvider {
     var documentCalls = 0
 
+    /** Все тексты, которые были отправлены на расчёт векторов, в порядке вызова. */
+    val embeddedTexts = mutableListOf<String>()
+
     override suspend fun embedQuery(text: String) = vector(text)
 
     override suspend fun embedDocuments(texts: List<String>): List<FloatArray> {
         documentCalls++
+        embeddedTexts += texts
         return texts.map(::vector)
     }
 
@@ -192,6 +196,9 @@ object TestCrawler {
         startUrl: String = "https://site.test",
         maxDepth: Int = 5,
         respectRobots: Boolean = true,
+        paginationParameter: String = "",
+        useCanonicalUrl: Boolean = false,
+        nodeScan: KnowledgeProperties.NodeScan = KnowledgeProperties.NodeScan(),
     ) = KnowledgeProperties.Crawler(
         startUrl = startUrl,
         maxDepth = maxDepth,
@@ -203,7 +210,10 @@ object TestCrawler {
         excludedExtensions = listOf(".pdf", ".jpg", ".png"),
         excludedPathParts = listOf("/admin", "/user"),
         respectRobotsTxt = respectRobots,
+        paginationParameter = paginationParameter,
+        useCanonicalUrl = useCanonicalUrl,
         extraCertificates = emptyList(),
+        nodeScan = nodeScan,
     )
 
     val indexing = KnowledgeProperties.Indexing(
@@ -212,15 +222,21 @@ object TestCrawler {
         parallelPages = 2,
         maxFailedShare = 0.2,
         minPagesShareOfPrevious = 0.5,
+        schemaVersion = "test",
     )
 
     /** Страница в формате сайта факультета: основное содержимое в `div#block-famcs-content`. */
     fun page(
         vararg sections: Pair<String, String>,
         links: List<String> = emptyList(),
+        canonical: String? = null,
+        shortlink: String? = null,
     ): String {
         val body = sections.joinToString("") { (title, text) -> "<h2>$title</h2><p>$text</p>" }
         val anchors = links.joinToString("") { "<a href=\"$it\">ссылка</a>" }
-        return "<html><head><title>Страница</title></head><body><div id=\"block-famcs-content\">$body$anchors</div></body></html>"
+        val canonicalTag = canonical?.let { "<link rel=\"canonical\" href=\"$it\"/>" }.orEmpty()
+        val shortlinkTag = shortlink?.let { "<link rel=\"shortlink\" href=\"$it\"/>" }.orEmpty()
+        val head = "<head><title>Страница</title>$canonicalTag$shortlinkTag</head>"
+        return "<html>$head<body><div id=\"block-famcs-content\">$body$anchors</div></body></html>"
     }
 }

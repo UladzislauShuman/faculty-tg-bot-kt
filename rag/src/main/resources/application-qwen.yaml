@@ -1,21 +1,29 @@
 # =============================================================================
 # Профиль qwen: Qwen (Alibaba Cloud Model Studio) через OpenAI-совместимый API.
-# Включение: SPRING_PROFILES_ACTIVE=qwen. Нужны QWEN_API_KEY и QWEN_BASE_URL (см. .env.example); без них бот не запустится.
-# Адрес зависит от региона и рабочего пространства: https://<WorkspaceId>.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1
-# (Сингапур; есть Вирджиния, Гонконг, Токио). Ключ привязан к региону: чужой регион даёт 401 (прочитано 2026-10-16).
-# Имена моделей меняются часто; QWEN_MODEL задаёт модель, `qwen-plus` — пример из документации. [проверить в консоли при регистрации]
-# Переопределяются только провайдеры и цепочки ролей; остальные параметры берутся из application.yaml.
+# Включение: SPRING_PROFILES_ACTIVE=qwen (в Docker: BOT_PROFILES=docker,qwen). Нужен QWEN_API_KEY; без него бот не запустится.
+# Адрес по умолчанию — международный регион (Сингапур): https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+# (прочитано 2026-10-21 в описаниях интеграций Genkit и Agno; Китай: https://dashscope.aliyuncs.com/compatible-mode/v1).
+# Ключ привязан к региону: ключ другого региона даёт 401. Новые рабочие пространства могут выдавать свой адрес
+# https://<WorkspaceId>.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1 — тогда задайте QWEN_BASE_URL.
+# Имена моделей Alibaba меняет раз в несколько месяцев (qwen-plus, qwen-flash, qwen3.x-…): QWEN_MODEL берите из консоли.
+# Переопределяются только провайдеры и цепочки ролей; температура, лимиты и промпты берутся из application.yaml.
 # =============================================================================
 bot:
   llm:
     providers:
       qwen:
         type: OPENAI_COMPATIBLE
-        base-url: ${QWEN_BASE_URL}
+        base-url: ${QWEN_BASE_URL:https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
         api-key: ${QWEN_API_KEY}
         default-model: ${QWEN_MODEL:qwen-plus}
         http-timeout: 60s
+        # Лимит аккаунта 600 запросов в минуту (консоль, 2026-10-21); бот шлёт 2–3 запроса на вопрос, 8 одновременных хватает.
         max-concurrent-calls: 8
+        # Гибридные модели Qwen3 умеют «рассуждать» перед ответом: это в разы больше выходных токенов и задержки. Справочному
+        # боту не нужно, поэтому отключается полем тела запроса enable_thinking (параметр DashScope для моделей Qwen3).
+        # Значение — литерал JSON в строке; ключ с подчёркиванием в скобках, иначе Spring Boot его исказит.
+        request-body:
+          "[enable_thinking]": "false"
     roles:
       classifier:
         call-timeout: 15s
@@ -37,3 +45,9 @@ bot:
         call-timeout: 30s
         chain:
           - { provider: qwen, model: "${QWEN_MODEL:qwen-plus}" }
+      # Судья проверок качества. Лучше модель другая, чем у генератора (судья не должен оценивать сам себя), например
+      # старшая модель линейки. Без QWEN_JUDGE_MODEL судьёй остаётся генераторная модель.
+      judge:
+        call-timeout: 60s
+        chain:
+          - { provider: qwen, model: "${QWEN_JUDGE_MODEL:${QWEN_MODEL:qwen-plus}}" }

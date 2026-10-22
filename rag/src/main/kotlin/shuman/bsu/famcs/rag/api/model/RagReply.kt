@@ -13,6 +13,8 @@ data class RagReply(
     val answerId: AnswerId? = null,
     val rejection: RejectionReason? = null,
     val elapsed: Duration = Duration.ZERO,
+    /** Что система сделала с вопросом по шагам. Есть только у обработанных вопросов. Telegram её не показывает. */
+    val trace: AnswerTrace? = null,
 ) {
     /** Нужно ли отправлять что-то пользователю. */
     val deliverable: Boolean get() = rejection?.silent != true

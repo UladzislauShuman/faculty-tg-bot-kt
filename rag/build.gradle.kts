@@ -125,8 +125,9 @@ ktlint {
 tasks.test {
     useJUnitPlatform {
         // Тяжёлые тесты запускаются отдельными командами; обычная сборка остаётся быстрой:
-        //   integration — нужен Docker (PostgreSQL, Qdrant), live — реальные провайдеры, model — файлы моделей из models/.
-        excludeTags("integration", "live", "model")
+        //   integration — нужен Docker (PostgreSQL, Qdrant), live — реальные провайдеры, model — файлы моделей из models/,
+        //   eval — проверка качества на наборе вопросов (нужны запущенный Qdrant с индексом и файлы моделей).
+        excludeTags("integration", "live", "model", "eval")
     }
 }
 
@@ -153,5 +154,32 @@ tasks.register<Test>("modelTest") {
     }
     // Две модели в памяти: эмбеддинги (2.2 ГБ весов) и реранкер (0.7 ГБ).
     maxHeapSize = "6g"
+    shouldRunAfter(tasks.test)
+}
+
+// Проверка качества на наборе вопросов `eval/qa-set.yaml`: поиск по настоящему индексу. Отчёты в build/reports/eval/.
+tasks.register<Test>("evalTest") {
+    description = "Качество поиска на наборе вопросов (нужны Qdrant с индексом и файлы моделей)."
+    group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform {
+        includeTags("eval")
+    }
+    maxHeapSize = "6g"
+    // Результат зависит от внешнего состояния (Qdrant, Ollama), поэтому задача всегда выполняется заново, а не берётся из кеша.
+    outputs.upToDateWhen { false }
+    // Строки прогресса из тестов («N из M, осталось …») видны в консоли во время долгого прогона.
+    testLogging {
+        showStandardStreams = true
+    }
+    // Параметры проверок передаются в тест из командной строки: -Peval.labels=provisional, -Peval.qaSet=путь.
+    listOf("eval.labels", "eval.qaSet", "eval.botUrl", "eval.profile", "eval.positives", "eval.answers", "eval.judgeDir").forEach { key ->
+        project.findProperty(key)?.let { systemProperty(key, it) }
+    }
+    // Печать сводки в консоль сборки.
+    testLogging {
+        showStandardStreams = true
+    }
     shouldRunAfter(tasks.test)
 }

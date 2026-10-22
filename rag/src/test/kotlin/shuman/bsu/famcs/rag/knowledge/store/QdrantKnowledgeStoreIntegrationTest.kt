@@ -12,6 +12,7 @@ import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import org.testcontainers.qdrant.QdrantContainer
 import shuman.bsu.famcs.rag.knowledge.model.HybridSearchRequest
+import shuman.bsu.famcs.rag.knowledge.model.PageType
 import shuman.bsu.famcs.rag.knowledge.model.SparseVector
 import shuman.bsu.famcs.rag.knowledge.store.implementation.QdrantCollections
 import shuman.bsu.famcs.rag.knowledge.store.implementation.QdrantKnowledgeReader
@@ -86,6 +87,35 @@ class QdrantKnowledgeStoreIntegrationTest {
         assertEquals("https://site/a", best.url)
         assertEquals("Раздел", best.headings["H2"])
         assertNotNull(best.indexedAt)
+    }
+
+    @Test
+    fun `тип и год страницы сохраняются в Qdrant и читаются при поиске`() = runBlocking<Unit> {
+        val (collections, writer, reader) = newStore("kb_type")
+        collections.activate(collections.create())
+        writer.replaceDocument(
+            null,
+            TestKnowledge.document(
+                "https://site/history-1997",
+                1,
+                TestKnowledge.chunk("https://site/history-1997", "избран заведующий", towardsX, intArrayOf(10)),
+                pageType = PageType.HISTORY,
+                year = 1997,
+            ),
+        )
+        writer.replaceDocument(
+            null,
+            TestKnowledge.document("https://site/dean", 1, TestKnowledge.chunk("https://site/dean", "декан", towardsY, intArrayOf(20))),
+        )
+
+        val hits = reader.search(HybridSearchRequest(dense = towardsX, sparse = SparseVector(intArrayOf(999), floatArrayOf(1f))))
+
+        val history = hits.first { it.url.endsWith("history-1997") }
+        assertEquals(PageType.HISTORY, history.pageType)
+        assertEquals(1997, history.year)
+        val dean = hits.first { it.url.endsWith("dean") }
+        assertEquals(PageType.SECTION, dean.pageType, "тип по умолчанию — основной раздел")
+        assertEquals(null, dean.year)
     }
 
     @Test

@@ -5,6 +5,7 @@ import dev.langchain4j.model.ollama.OllamaChatModel
 import dev.langchain4j.model.openai.OpenAiChatModel
 import shuman.bsu.famcs.rag.llm.configuration.properties.LlmProperties.ProviderProperties
 import shuman.bsu.famcs.rag.llm.configuration.properties.LlmProperties.ProviderType
+import tools.jackson.databind.json.JsonMapper
 
 /**
  * Собирает [ChatModel] LangChain4j по настройкам провайдера.
@@ -84,10 +85,24 @@ object ChatModelFactory {
             .apiKey(key)
             .modelName(properties.defaultModel)
             .customHeaders(properties.headers)
+            // Дополнительные поля тела запроса (например, отключение режима рассуждений у DeepSeek).
+            .customParameters(requestBodyOf(properties.requestBody))
             .timeout(properties.httpTimeout)
             .maxRetries(0)
             .logRequests(false)
             .logResponses(false)
             .build()
+    }
+
+    private val json = JsonMapper.builder().build()
+
+    /**
+     * Превращает настройку `request-body` в поля тела запроса: значение, которое читается как JSON (`false`, `5`, `{"type":"disabled"}`),
+     * становится булевым, числом или объектом, остальное остаётся строкой.
+     *
+     * @param raw значения из настроек.
+     */
+    internal fun requestBodyOf(raw: Map<String, String>): Map<String, Any> = raw.mapValues { (_, value) ->
+        runCatching { json.readValue(value, Any::class.java) }.getOrNull() ?: value
     }
 }

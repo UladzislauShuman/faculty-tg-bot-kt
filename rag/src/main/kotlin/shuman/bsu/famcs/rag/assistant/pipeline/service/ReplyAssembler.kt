@@ -32,6 +32,14 @@ class ReplyAssembler(
         when {
             output.noInfo -> {
                 if (messages.noInfoHint !in output.text) append("\n\n").append(messages.noInfoHint)
+                if (output.suggestions.isNotEmpty()) {
+                    append("\n\n").append(messages.suggestionsTitle)
+                    output.suggestions.forEach { page ->
+                        append("\n• ")
+                        page.title?.let { append(it.substringBefore(titleSeparator).trim()).append(" — ") }
+                        append(page.url)
+                    }
+                }
             }
 
             else -> {
