@@ -198,6 +198,7 @@ object TestCrawler {
         respectRobots: Boolean = true,
         paginationParameter: String = "",
         useCanonicalUrl: Boolean = false,
+        nodeScan: KnowledgeProperties.NodeScan = KnowledgeProperties.NodeScan(),
     ) = KnowledgeProperties.Crawler(
         startUrl = startUrl,
         maxDepth = maxDepth,
@@ -212,6 +213,7 @@ object TestCrawler {
         paginationParameter = paginationParameter,
         useCanonicalUrl = useCanonicalUrl,
         extraCertificates = emptyList(),
+        nodeScan = nodeScan,
     )
 
     val indexing = KnowledgeProperties.Indexing(
@@ -228,11 +230,13 @@ object TestCrawler {
         vararg sections: Pair<String, String>,
         links: List<String> = emptyList(),
         canonical: String? = null,
+        shortlink: String? = null,
     ): String {
         val body = sections.joinToString("") { (title, text) -> "<h2>$title</h2><p>$text</p>" }
         val anchors = links.joinToString("") { "<a href=\"$it\">ссылка</a>" }
         val canonicalTag = canonical?.let { "<link rel=\"canonical\" href=\"$it\"/>" }.orEmpty()
-        val head = "<head><title>Страница</title>$canonicalTag</head>"
+        val shortlinkTag = shortlink?.let { "<link rel=\"shortlink\" href=\"$it\"/>" }.orEmpty()
+        val head = "<head><title>Страница</title>$canonicalTag$shortlinkTag</head>"
         return "<html>$head<body><div id=\"block-famcs-content\">$body$anchors</div></body></html>"
     }
 }

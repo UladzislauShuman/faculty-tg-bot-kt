@@ -59,7 +59,7 @@ class KnowledgeRetriever(
         val scores = meters.timed("retrieval.latency", "stage", "rerank") { reranker.score(query, parents.map { rerankText(it) }) }
         val rerankMillis = rerankStart.elapsedNow().inWholeMilliseconds
         val years = RankingPolicy.yearsIn(query)
-        val weights = parents.associateWith { ranking.factor(it.pageType, it.year, years) }
+        val weights = parents.associateWith { ranking.factor(it.pageType, it.year, years, it.orphan) }
         // Порядок задаёт оценка реранкера с поправкой по типу страницы; в трассе остаётся и сама оценка, и множитель.
         val ranked = parents.zip(scores).sortedByDescending { (hit, score) -> score * weights.getValue(hit) }
         val selected = ranked.take(topN).map { it.first }.toSet()
@@ -99,10 +99,14 @@ class KnowledgeRetriever(
     private companion object {
         /** Сколько знаков найденного фрагмента показывается в трассе. */
         const val MATCHED_PREVIEW = 160
+        val WHITESPACE = Regex("\\s+")
     }
 
     /** Несколько фрагментов одного раздела дают один раздел. Порядок поиска сохраняется. */
-    private fun uniqueParents(hits: List<SearchHit>): List<SearchHit> = hits.distinctBy { it.parentId.ifEmpty { it.id } }
+    private fun uniqueParents(hits: List<SearchHit>): List<SearchHit> = hits
+        .distinctBy { it.parentId.ifEmpty { it.id } }
+        // Один и тот же текст на разных страницах (повторы разделов) занимал бы несколько мест в выдаче: остаётся первый.
+        .distinctBy { it.parentText.replace(WHITESPACE, " ").trim() }
 
     /**
      * Переводит найденный фрагмент в раздел для промпта: берётся текст родителя, а не мелкого фрагмента.
@@ -119,5 +123,6 @@ class KnowledgeRetriever(
         relevance = relevance,
         pageType = pageType,
         year = year,
+        published = published,
     )
 }

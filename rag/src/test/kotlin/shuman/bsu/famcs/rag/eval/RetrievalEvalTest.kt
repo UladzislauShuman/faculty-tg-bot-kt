@@ -38,7 +38,15 @@ class RetrievalEvalTest {
     @Test
     fun `поиск находит страницу, по которой написан вопрос`() = runBlocking {
         val cases = QaSetLoader.load(Path.of(System.getProperty("eval.qaSet", "eval/qa-set.yaml"))).filter { it.standalone }
-        val rows = cases.map { search(it) }
+        val progress = EvalProgress("Поиск", cases.size)
+        var found = 0
+        val rows = cases.map { case ->
+            search(case).also { row ->
+                if (row.rank != null) found++
+                progress.step { "нужная страница в выдаче у $found" }
+            }
+        }
+        progress.finish()
 
         val report = Path.of("build/reports/eval/retrieval.md")
         Files.createDirectories(report.parent)

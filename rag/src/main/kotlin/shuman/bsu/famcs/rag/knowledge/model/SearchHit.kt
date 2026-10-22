@@ -16,4 +16,7 @@ data class SearchHit(
     val indexedAt: Instant?,
     val pageType: PageType = PageType.SECTION,
     val year: Int? = null,
+    val published: java.time.LocalDate? = null,
+    /** Страница-«сирота»: найдена перебором номеров, а не по ссылкам. */
+    val orphan: Boolean = false,
 )

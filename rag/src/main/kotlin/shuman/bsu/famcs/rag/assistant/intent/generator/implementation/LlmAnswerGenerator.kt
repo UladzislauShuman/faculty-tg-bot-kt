@@ -10,6 +10,7 @@ import shuman.bsu.famcs.rag.llm.model.LlmRequest
 import shuman.bsu.famcs.rag.llm.model.LlmRole
 import shuman.bsu.famcs.rag.llm.service.LlmClient
 import shuman.bsu.famcs.rag.platform.text.PromptLibrary
+import java.time.format.DateTimeFormatter
 
 /**
  * Генерация ответа моделью с ролью GENERATOR.
@@ -55,8 +56,10 @@ class LlmAnswerGenerator(
     /** Текст раздела для промпта; при включённой подписи впереди название страницы и год. */
     private fun withHeader(passage: RetrievedPassage): String {
         if (!passageHeader) return passage.text
-        val year = passage.year?.let { ", $it" }.orEmpty()
-        return "[Источник: ${ChunkContext.shortTitle(passage.title)}$year]\n${passage.text}"
+        // Точная дата (оценка по странице) полезнее года: по ней модель выбирает более новое при противоречии.
+        val dateText = passage.published?.format(DATE) ?: passage.year?.toString()
+        val suffix = dateText?.let { ", $it" }.orEmpty()
+        return "[Источник: ${ChunkContext.shortTitle(passage.title)}$suffix]\n${passage.text}"
     }
 
     /** Приводит текст к виду для сравнения: нижний регистр, «ё» как «е», пробелы схлопнуты. */
@@ -65,4 +68,9 @@ class LlmAnswerGenerator(
         .replace('ё', 'е')
         .replace(Regex("\\s+"), " ")
         .trim()
+
+    private companion object {
+        /** Формат даты в подписи раздела. */
+        val DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+    }
 }

@@ -107,7 +107,7 @@ class KnowledgeRetrieverTest {
         id: String,
         type: PageType,
         year: Int? = null,
-    ) = hit(id, id, "про практику").copy(pageType = type, year = year)
+    ) = hit(id, id, "про практику, страница $id").copy(pageType = type, year = year)
 
     @Test
     fun `перечень с высокой оценкой реранкера уступает основной странице с чуть меньшей`() = runTest {
@@ -162,6 +162,19 @@ class KnowledgeRetrieverTest {
 
         assertEquals("Страница p1. Раздел: Раздел\nпро практику", seen[0], "с контекстом")
         assertEquals("про практику", seen[1], "без контекста")
+    }
+
+    @Test
+    fun `одинаковый текст раздела на разных страницах занимает одно место в выдаче`() = runTest {
+        val hits = listOf(
+            hit("1", "p1", "Приём документов до 17 июля"),
+            hit("2", "p2", "Приём   документов до 17 июля "),
+            hit("3", "p3", "про общежитие"),
+        )
+
+        val result = retriever(hits, reranker = null, topN = 5).retrieve("вопрос")
+
+        assertEquals(listOf("p1", "p3"), result.passages.map { it.parentId }, "копия с другими пробелами отброшена")
     }
 
     @Test

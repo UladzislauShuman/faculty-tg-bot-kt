@@ -21,4 +21,6 @@ data class HandlerOutput(
     val searchMillis: Long = 0,
     val rerankMillis: Long = 0,
     val generationMillis: Long = 0,
+    /** Близкие страницы для ответа «не нашёл»: пользователь может поискать сам. Пусто у обычных ответов. */
+    val suggestions: List<AnswerSource> = emptyList(),
 )

@@ -169,8 +169,14 @@ tasks.register<Test>("evalTest") {
     maxHeapSize = "6g"
     // Результат зависит от внешнего состояния (Qdrant, Ollama), поэтому задача всегда выполняется заново, а не берётся из кеша.
     outputs.upToDateWhen { false }
+    // Строки прогресса из тестов («N из M, осталось …») видны в консоли во время долгого прогона.
+    testLogging {
+        showStandardStreams = true
+    }
     // Параметры проверок передаются в тест из командной строки: -Peval.labels=provisional, -Peval.qaSet=путь.
-    listOf("eval.labels", "eval.qaSet", "eval.botUrl").forEach { key -> project.findProperty(key)?.let { systemProperty(key, it) } }
+    listOf("eval.labels", "eval.qaSet", "eval.botUrl", "eval.profile", "eval.positives", "eval.answers", "eval.judgeDir").forEach { key ->
+        project.findProperty(key)?.let { systemProperty(key, it) }
+    }
     // Печать сводки в консоль сборки.
     testLogging {
         showStandardStreams = true

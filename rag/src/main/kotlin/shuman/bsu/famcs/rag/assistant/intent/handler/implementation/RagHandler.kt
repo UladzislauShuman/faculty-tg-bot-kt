@@ -8,6 +8,8 @@ import shuman.bsu.famcs.rag.assistant.intent.handler.IntentHandler
 import shuman.bsu.famcs.rag.assistant.intent.model.HandlerInput
 import shuman.bsu.famcs.rag.assistant.intent.model.HandlerOutput
 import shuman.bsu.famcs.rag.assistant.intent.model.Intent
+import shuman.bsu.famcs.rag.knowledge.model.PageType
+import shuman.bsu.famcs.rag.knowledge.model.RetrievedCandidate
 import shuman.bsu.famcs.rag.knowledge.model.RetrievedPassage
 import shuman.bsu.famcs.rag.knowledge.retrieval.KnowledgeRetriever
 import java.time.ZoneId
@@ -41,6 +43,7 @@ class RagHandler(
 
         val generationStart = TimeSource.Monotonic.markNow()
         val answer = generator.generate(input.question, input.context, retrieval.passages)
+        val suggestions = if (answer.noInfo) suggestionsOf(retrieval.pool) else emptyList()
         return HandlerOutput(
             text = answer.text,
             noInfo = answer.noInfo,
@@ -52,8 +55,21 @@ class RagHandler(
             searchMillis = retrieval.searchMillis,
             rerankMillis = retrieval.rerankMillis,
             generationMillis = generationStart.elapsedNow().inWholeMilliseconds,
+            suggestions = suggestions,
         )
     }
+
+    /**
+     * Близкие страницы для ответа «не нашёл»: из кандидатов поиска без перечней, с оценкой не ниже порога, по одной на страницу.
+     * Точного ответа нет, но страница по теме (олимпиады, госэкзамен) подсказывает, где искать.
+     *
+     * @param pool кандидаты поиска в порядке реранкера.
+     */
+    private fun suggestionsOf(pool: List<RetrievedCandidate>): List<AnswerSource> = pool
+        .filter { it.pageType != PageType.LIST && ((it.relevance ?: 1.0) * it.weight) >= properties.suggestionMinScore }
+        .distinctBy { it.url }
+        .take(properties.maxSuggestions)
+        .map { AnswerSource(url = it.url, title = it.title.ifBlank { null }, checkedAt = null) }
 
     /**
      * Выбирает источники для показа: по одной ссылке на страницу, не больше `maxSources`, с датой проверки страницы.

@@ -43,15 +43,48 @@ class EndToEndCollectEvalTest {
         val out = Path.of("build/reports/eval/e2e_answers.jsonl")
         Files.createDirectories(out.parent)
         Files.newBufferedWriter(out).use { writer ->
+            val progress = EvalProgress("Сбор ответов", cases.size)
+            val statuses = mutableMapOf<String, Int>()
             for (case in cases) {
                 val userId = case.scenario?.let { scenarioUsers.getValue(it) } ?: (base + 500 + case.id)
-                val row = ask(baseUrl, apiKey, userId, case)
+                val row = askWithRateLimitRetry(baseUrl, apiKey, userId, case)
                 writer.write(mapper.writeValueAsString(row))
                 writer.newLine()
                 writer.flush()
+                statuses.merge(row.status, 1, Int::plus)
+                progress.step {
+                    "статусы ${statuses.entries.joinToString { "${it.key} ${it.value}" }}, последний ответ ${row.elapsedMs / 1000} с"
+                }
             }
+            progress.finish("статусы $statuses")
         }
         assertTrue(Files.size(out) > 0)
+    }
+
+    /**
+     * Задаёт вопрос; если бот ответил «слишком много вопросов подряд», ждёт указанное в ответе время и повторяет.
+     * Лимит бота защищает пользователей, а не проверяет качество: в прогоне отказ по лимиту не должен считаться неверным ответом.
+     */
+    private fun askWithRateLimitRetry(
+        baseUrl: String,
+        apiKey: String,
+        userId: Long,
+        case: shuman.bsu.famcs.rag.eval.model.EvalCase,
+    ): E2eRow {
+        var row = ask(baseUrl, apiKey, userId, case)
+        var attempt = 0
+        while (row.status == "RATE_LIMITED" && attempt < MAX_RATE_LIMIT_RETRIES) {
+            val seconds = Regex("через (\\d+) с")
+                .find(row.answer)
+                ?.groupValues
+                ?.get(1)
+                ?.toLongOrNull() ?: DEFAULT_WAIT_SECONDS
+            println("Лимит бота: вопрос ${case.id}, жду $seconds с (попытка ${attempt + 1} из $MAX_RATE_LIMIT_RETRIES)")
+            Thread.sleep((seconds + 1) * 1000)
+            row = ask(baseUrl, apiKey, userId, case)
+            attempt++
+        }
+        return row
     }
 
     /** Задаёт один вопрос боту; при сбое связи возвращает строку со статусом `CLIENT_ERROR`, чтобы прогон не прерывался. */
@@ -80,7 +113,11 @@ class EndToEndCollectEvalTest {
             reference = case.referenceAnswer,
             expectedUrl = case.expectedUrl,
             status = tree["status"].asString(),
-            answer = tree["text"].asString().substringBefore("\n\nИсточники:").trim(),
+            answer = tree["text"]
+                .asString()
+                .substringBefore("\n\nИсточники:")
+                .substringBefore("\n\nВозможно, поможет:")
+                .trim(),
             route = trace?.get("route")?.asString(),
             query = trace?.get("query")?.asString(),
             passageUrls = passages.map { it["url"].asString() },
@@ -111,5 +148,10 @@ class EndToEndCollectEvalTest {
             0,
             null,
         )
+    }
+
+    private companion object {
+        const val MAX_RATE_LIMIT_RETRIES = 3
+        const val DEFAULT_WAIT_SECONDS = 30L
     }
 }

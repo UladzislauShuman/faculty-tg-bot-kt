@@ -33,7 +33,9 @@ import java.security.MessageDigest
 import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.TimeSource
 
 private val log = KotlinLogging.logger {}
 
@@ -121,8 +123,20 @@ class Indexer(
         try {
             val pending = ConcurrentLinkedQueue<PendingSave>()
             val gate = Semaphore(settings.parallelPages)
+            val progress = IndexProgress(runId, found.size)
+            log.info { "Индексация #$runId: страниц к обработке ${found.size}, ошибок скачивания ${failedUrls.size}" }
             val outcomes = coroutineScope {
-                found.map { doc -> async { gate.withPermit { processPage(doc, mode, known[doc.url], target, runId, pending) } } }.awaitAll()
+                found
+                    .map { doc ->
+                        async {
+                            gate.withPermit { processPage(doc, mode, known[doc.url], target, runId, pending) }.also {
+                                progress.record(
+                                    changed =
+                                        it == PageOutcome.CHANGED,
+                                )
+                            }
+                        }
+                    }.awaitAll()
             }
             val changed = outcomes.count { it == PageOutcome.CHANGED }
             val failed = failedUrls.size + outcomes.count { it == PageOutcome.FAILED }
@@ -247,7 +261,15 @@ class Indexer(
         // Для поиска к фрагменту приписывается контекст страницы, в данных и в ответе остаётся чистый текст.
         val searchTexts = chunked.children.map { child ->
             val parent = requireNotNull(chunked.parentOf(child)) { "У фрагмента ${child.id} нет родителя" }
-            if (contextInSearchText) ChunkContext.searchText(chunked.title, parent.headings, child.text) else child.text
+            if (contextInSearchText) {
+                ChunkContext.searchText(
+                    chunked.title,
+                    child.headings.ifEmpty { parent.headings },
+                    child.text,
+                )
+            } else {
+                child.text
+            }
         }
         val dense = embeddings.embedDocuments(searchTexts)
         val chunks = chunked.children.mapIndexed { index, child ->
@@ -257,12 +279,22 @@ class Indexer(
                 text = child.text,
                 parentId = parent.id,
                 parentText = parent.text,
-                headings = parent.headings,
+                headings = child.headings.ifEmpty { parent.headings },
                 dense = dense[index],
                 sparse = sparse.encodeDocument(searchTexts[index]),
             )
         }
-        return IndexedDocument(chunked.url, chunked.title, clock.instant(), version, chunks, chunked.pageType, chunked.year)
+        return IndexedDocument(
+            chunked.url,
+            chunked.title,
+            clock.instant(),
+            version,
+            chunks,
+            chunked.pageType,
+            chunked.year,
+            chunked.published,
+            chunked.orphan,
+        )
     }
 
     /**
@@ -330,6 +362,8 @@ class Indexer(
         // Версия схемы и тип страницы входят в хеш: смена того, чего нет в тексте страницы, тоже требует пересчёта.
         digest.update(settings.schemaVersion.toByteArray(Charsets.UTF_8))
         digest.update(chunked.pageType.name.toByteArray(Charsets.UTF_8))
+        digest.update((chunked.published?.toString() ?: "").toByteArray(Charsets.UTF_8))
+        digest.update(if (chunked.orphan) 1 else 0)
         digest.update(chunked.title.toByteArray(Charsets.UTF_8))
         chunked.parents.forEach { parent ->
             digest.update(0)
@@ -340,5 +374,44 @@ class Indexer(
 
     private companion object {
         val EMPTY = IndexCounters(0, 0, 0, 0)
+    }
+}
+
+/**
+ * Прогресс обработки страниц для журнала: раз в [STEP] страниц и на последней пишет, сколько обработано, сколько изменилось,
+ * сколько прошло времени и сколько примерно осталось. Страницы обрабатываются параллельно, поэтому счётчики атомарные.
+ *
+ * @property runId номер запуска.
+ * @property total число страниц.
+ */
+private class IndexProgress(
+    private val runId: Long,
+    private val total: Int,
+) {
+    private val started = TimeSource.Monotonic.markNow()
+    private val done = AtomicInteger()
+    private val changed = AtomicInteger()
+
+    /**
+     * Учитывает обработанную страницу.
+     *
+     * @param changed страница записана заново (новая или изменённая).
+     */
+    fun record(changed: Boolean) {
+        if (changed) this.changed.incrementAndGet()
+        val count = done.incrementAndGet()
+        if (count % STEP != 0 && count != total) return
+        val elapsed = started.elapsedNow().inWholeSeconds
+        val remaining = elapsed * (total - count) / count
+        log.info {
+            "Индексация #$runId: обработано $count из $total, изменено ${this.changed.get()}, " +
+                "прошло ${elapsed / 60} мин ${elapsed % 60} с, " +
+                "осталось ≈ ${remaining / 60} мин"
+        }
+    }
+
+    private companion object {
+        /** Через сколько страниц писать строку прогресса. */
+        const val STEP = 25
     }
 }

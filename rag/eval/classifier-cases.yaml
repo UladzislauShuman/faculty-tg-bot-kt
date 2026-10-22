@@ -1,0 +1,45 @@
+# Примеры для проверки классификатора веток (разметка Claude 2026-10-21, проверена автором 2026-10-21: все метки верны).
+# Положительные примеры (ветка RAG) берутся автоматически из вопросов набора: все они о факультете.
+# Здесь только запросы, которые должны уйти в другие ветки. label: GENERAL | SMALLTALK | SCHEDULE.
+- { label: GENERAL, text: "Сколько будет 15 умножить на 17?" }
+- { label: GENERAL, text: "Какая столица Франции?" }
+- { label: GENERAL, text: "Напиши функцию сортировки на Python" }
+- { label: GENERAL, text: "Какая завтра погода в Минске?" }
+- { label: GENERAL, text: "Расскажи анекдот" }
+- { label: GENERAL, text: "Как приготовить борщ?" }
+- { label: GENERAL, text: "Кто написал «Войну и мир»?" }
+- { label: GENERAL, text: "Что такое интеграл?" }
+- { label: GENERAL, text: "Объясни, как работает нейронная сеть" }
+- { label: GENERAL, text: "Какой сегодня курс доллара?" }
+- { label: GENERAL, text: "Как быстро выучить английский?" }
+- { label: GENERAL, text: "Посоветуй фильм на вечер" }
+- { label: GENERAL, text: "Реши уравнение x^2 - 5x + 6 = 0" }
+- { label: GENERAL, text: "Что такое рекурсия?" }
+- { label: GENERAL, text: "Сколько лететь до Москвы?" }
+- { label: GENERAL, text: "Кто выиграл чемпионат мира по футболу в 2018 году?" }
+- { label: GENERAL, text: "Переведи на английский: добрый день" }
+- { label: GENERAL, text: "Как похудеть за месяц?" }
+- { label: GENERAL, text: "Напиши стих про осень" }
+- { label: GENERAL, text: "Какое самое высокое здание в мире?" }
+- { label: GENERAL, text: "Что такое блокчейн?" }
+- { label: GENERAL, text: "Как работает git rebase?" }
+- { label: GENERAL, text: "Какая столица Японии?" }
+- { label: GENERAL, text: "При какой температуре кипит вода?" }
+- { label: GENERAL, text: "Объясни теорему Пифагора" }
+- { label: SMALLTALK, text: "Что ты умеешь?" }
+- { label: SMALLTALK, text: "Кто тебя создал?" }
+- { label: SMALLTALK, text: "Ты бот?" }
+- { label: SMALLTALK, text: "Как тебя зовут?" }
+- { label: SMALLTALK, text: "Ты умный?" }
+- { label: SMALLTALK, text: "Помоги мне, пожалуйста" }
+- { label: SMALLTALK, text: "Отлично, благодарю за помощь" }
+- { label: SMALLTALK, text: "Расскажи о себе" }
+- { label: SMALLTALK, text: "Ты можешь мне помочь?" }
+- { label: SCHEDULE, text: "Какое расписание занятий у второго курса?" }
+- { label: SCHEDULE, text: "Когда начинается первая пара?" }
+- { label: SCHEDULE, text: "Во сколько звонки на пары?" }
+- { label: SCHEDULE, text: "Расписание группы 5 на завтра" }
+- { label: SCHEDULE, text: "Какая пара сегодня у третьего курса?" }
+- { label: SCHEDULE, text: "Расписание преподавателя Иванова на неделю" }
+- { label: SCHEDULE, text: "В какой аудитории завтра лекция по алгебре?" }
+- { label: SCHEDULE, text: "Какие сегодня пары?" }

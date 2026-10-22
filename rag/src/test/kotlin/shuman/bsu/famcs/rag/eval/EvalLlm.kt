@@ -29,8 +29,11 @@ object EvalLlm {
      */
     fun client(): LlmClient {
         val environment = StandardEnvironment()
-        YamlPropertySourceLoader().load("application", ClassPathResource("application.yaml")).forEach {
-            environment.propertySources.addLast(it)
+        // Профиль (например, ollama-cloud, как в запущенном боте) накладывается поверх основного файла: у профиля приоритет.
+        val profile = System.getProperty("eval.profile").orEmpty()
+        val files = if (profile.isBlank()) listOf("application") else listOf("application-$profile", "application")
+        for (name in files) {
+            YamlPropertySourceLoader().load(name, ClassPathResource("$name.yaml")).forEach { environment.propertySources.addLast(it) }
         }
         val properties = Binder.get(environment).bind("bot.llm", LlmProperties::class.java).get()
         return LlmConfiguration().llmClient(

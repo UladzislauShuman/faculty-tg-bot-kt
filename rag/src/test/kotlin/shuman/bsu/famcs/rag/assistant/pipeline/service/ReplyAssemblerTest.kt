@@ -13,6 +13,19 @@ class ReplyAssemblerTest {
     private val checked = LocalDate.of(2026, 10, 7)
 
     @Test
+    fun `под ответом не нашёл показываются близкие страницы с заголовком`() {
+        val text = assembler.assemble(
+            HandlerOutput(
+                text = "Нет данных.",
+                noInfo = true,
+                suggestions = listOf(AnswerSource("https://fpmi.bsu.by/olympiads", "Олимпиады | Факультет", null)),
+            ),
+        )
+
+        assertTrue(text.endsWith("${TestRag.messages.suggestionsTitle}\n• Олимпиады — https://fpmi.bsu.by/olympiads"), text)
+    }
+
+    @Test
     fun `источники выводятся списком с заголовком, адресом и датой проверки`() {
         val text = assembler.assemble(
             HandlerOutput(

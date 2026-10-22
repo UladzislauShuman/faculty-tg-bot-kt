@@ -85,13 +85,19 @@ class ParentChildHtmlChunkerParityTest {
 
 /** Ограничение размера родителя: настройка, которой в Python нет, поэтому проверяется отдельно от паритета. */
 class ParentSizeLimitTest {
-    private fun chunker(maxParentChars: Int) = ParentChildHtmlChunker(
+    private fun chunker(
+        maxParentChars: Int,
+        tablesAsRows: Boolean = false,
+        wholePageMaxChars: Int = 0,
+    ) = ParentChildHtmlChunker(
         converter = HtmlToMarkdown(escapeAsterisks = true, escapeUnderscores = true, bullets = "*+-", absolutizeLinks = false),
         headerSplitter = MarkdownHeaderSplitter(listOf(MarkdownHeaderSplitter.Header("##", "H2"))),
         childSplitter = RecursiveCharacterSplitter(chunkSize = 300, chunkOverlap = 50, separators = listOf("\n\n", "\n", ".", " ", "")),
         contentSelectors = listOf("div#block-famcs-content"),
         removedTags = listOf("script"),
         maxParentChars = maxParentChars,
+        tablesAsRows = tablesAsRows,
+        wholePageMaxChars = wholePageMaxChars,
     )
 
     private val chronicle = FetchedDocument(
@@ -134,5 +140,52 @@ class ParentSizeLimitTest {
         val history = page("path-node page-node-type-page", "https://fpmi.bsu.by/history-1997")
         assertEquals(PageType.HISTORY, history.pageType)
         assertEquals(1997, history.year)
+    }
+
+    private fun smallPage(body: String) = FetchedDocument(
+        url = "https://fpmi.bsu.by/Admissions-campaign",
+        mediaType = "text/html",
+        body = "<html><head><title>Абитуриенту</title></head><body><div id=\"block-famcs-content\">$body</div></body></html>",
+        fetchedAt = Instant.parse("2026-10-08T00:00:00Z"),
+    )
+
+    @Test
+    fun `маленькая страница становится одним родителем, а дети помнят свой раздел`() {
+        val page = smallPage("<h2>Сроки</h2><p>Документы принимаются до 17 июля.</p><h2>Документы</h2><p>Паспорт и аттестат.</p>")
+
+        val result = chunker(maxParentChars = 1500, wholePageMaxChars = 4000).chunk(page)
+
+        assertEquals(1, result.parents.size, "две секции слились в одного родителя")
+        assertTrue(
+            "## Сроки" in result.parents.single().text && "## Документы" in result.parents.single().text,
+            "заголовки в тексте родителя",
+        )
+        assertEquals(setOf("Сроки", "Документы"), result.children.mapNotNull { it.headings["H2"] }.toSet(), "ребёнок помнит свой заголовок")
+        assertTrue(result.children.all { it.parentId == result.parents.single().id })
+    }
+
+    @Test
+    fun `большая страница по-прежнему делится на разделы`() {
+        val page = smallPage("<h2>А</h2><p>${"слово ".repeat(500)}</p><h2>Б</h2><p>текст</p>")
+
+        val result = chunker(maxParentChars = 1500, wholePageMaxChars = 1000).chunk(page)
+
+        assertTrue(result.parents.size > 1)
+    }
+
+    @Test
+    fun `таблица в странице превращается в строки с названиями колонок`() {
+        val page = smallPage(
+            "<h2>План приёма</h2><table><tr><th>Специальность</th><th>Бюджет</th></tr><tr><td>Информатика</td><td>20</td></tr></table>",
+        )
+
+        val result = chunker(maxParentChars = 0, tablesAsRows = true).chunk(page)
+
+        assertTrue(
+            result.children.any {
+                "Специальность: Информатика; Бюджет: 20" in it.text
+            },
+            "строка таблицы самостоятельна: ${result.children.map { it.text }}",
+        )
     }
 }

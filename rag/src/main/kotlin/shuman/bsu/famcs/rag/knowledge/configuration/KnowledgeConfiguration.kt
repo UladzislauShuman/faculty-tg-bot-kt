@@ -183,7 +183,7 @@ class KnowledgeConfiguration {
         reranker = reranker.ifAvailable,
         topN = properties.reranker.topN,
         meters = meters,
-        ranking = RankingPolicy(properties.ranking.typeWeights, properties.ranking.yearBoost),
+        ranking = RankingPolicy(properties.ranking.typeWeights, properties.ranking.yearBoost, properties.ranking.orphanWeight),
         rerankWithContext = properties.ranking.rerankWithContext,
     )
 
@@ -201,6 +201,8 @@ class KnowledgeConfiguration {
             contentSelectors = chunking.contentSelectors,
             removedTags = chunking.removedTags,
             maxParentChars = chunking.parentMaxChars,
+            tablesAsRows = chunking.tablesAsRows,
+            wholePageMaxChars = chunking.wholePageMaxChars,
         )
     }
 

@@ -2,6 +2,7 @@ package shuman.bsu.famcs.rag.knowledge.source
 
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
+import shuman.bsu.famcs.rag.knowledge.configuration.properties.KnowledgeProperties
 import shuman.bsu.famcs.rag.knowledge.source.implementation.RobotsRules
 import shuman.bsu.famcs.rag.knowledge.source.implementation.SiteCrawler
 import shuman.bsu.famcs.rag.testsupport.InMemorySite
@@ -16,6 +17,7 @@ class SiteCrawlerTest {
         respectRobots: Boolean = true,
         paginationParameter: String = "",
         useCanonicalUrl: Boolean = false,
+        nodeScan: KnowledgeProperties.NodeScan = KnowledgeProperties.NodeScan(),
     ) = SiteCrawler(
         site,
         TestCrawler.settings(
@@ -23,6 +25,7 @@ class SiteCrawlerTest {
             respectRobots = respectRobots,
             paginationParameter = paginationParameter,
             useCanonicalUrl = useCanonicalUrl,
+            nodeScan = nodeScan,
         ),
     )
 
@@ -255,5 +258,68 @@ class SiteCrawlerTest {
 
         assertTrue(rules.isAllowed("/news"))
         assertTrue(!rules.isAllowed("/secret/a"))
+    }
+
+    @Test
+    fun `перебор номеров находит страницу без ссылок и помечает её сиротой, известные номера не скачивает`() = runTest {
+        val site = InMemorySite(
+            mapOf(
+                "https://site.test" to
+                    TestCrawler.page("Главная" to "текст", links = listOf("/about"), shortlink = "https://site.test/node/1"),
+                "https://site.test/about" to TestCrawler.page("О нас" to "текст", shortlink = "https://site.test/node/2"),
+                "https://site.test/node/4" to TestCrawler.page("Правила" to "текст", canonical = "https://site.test/rules"),
+            ),
+        )
+        val scan = KnowledgeProperties.NodeScan(enabled = true, maxConsecutiveMissing = 3)
+
+        val result = crawl(site, useCanonicalUrl = true, nodeScan = scan).crawl()
+
+        val orphan = result.documents.single { it.orphan }
+        assertEquals("https://site.test/rules", orphan.url, "адрес — канонический, а не номер")
+        assertTrue(
+            result.documents
+                .filter { !it.orphan }
+                .map { it.url }
+                .containsAll(listOf("https://site.test", "https://site.test/about")),
+        )
+        assertTrue(
+            "https://site.test/node/1" !in site.requested && "https://site.test/node/2" !in site.requested,
+            "известные номера не скачиваются",
+        )
+        assertEquals(
+            listOf(
+                "https://site.test/node/3",
+                "https://site.test/node/4",
+                "https://site.test/node/5",
+                "https://site.test/node/6",
+                "https://site.test/node/7",
+            ),
+            site.requested.filter { "/node/" in it },
+            "после трёх пропусков подряд перебор остановлен",
+        )
+    }
+
+    @Test
+    fun `пропуски перебора не считаются удалёнными страницами и ошибками`() = runTest {
+        val site = InMemorySite(
+            mapOf("https://site.test" to TestCrawler.page("Главная" to "текст")),
+            failing = setOf("https://site.test/node/2"),
+        )
+        val scan = KnowledgeProperties.NodeScan(enabled = true, maxConsecutiveMissing = 2)
+
+        val result = crawl(site, nodeScan = scan).crawl()
+
+        assertTrue(result.notFound.isEmpty(), "404 перебора не попадает в «не найдено»")
+        assertTrue(result.failed.isEmpty(), "закрытый номер не попадает в ошибки")
+        assertEquals(1, result.documents.size)
+    }
+
+    @Test
+    fun `без включённого перебора номера не запрашиваются`() = runTest {
+        val site = InMemorySite(mapOf("https://site.test" to TestCrawler.page("Главная" to "текст")))
+
+        crawl(site).crawl()
+
+        assertTrue(site.requested.none { "/node/" in it })
     }
 }

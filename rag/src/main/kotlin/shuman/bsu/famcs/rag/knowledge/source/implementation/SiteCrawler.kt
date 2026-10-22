@@ -22,6 +22,8 @@ private val log = KotlinLogging.logger {}
  * Отличие от Python: листание списков (`?page=N`) не отбрасывается. Иначе обход не доходит до новостей со второй страницы списка
  * и дальше (на сайте факультета так терялись 213 страниц). Сами страницы списков в документы не попадают: это перечни заголовков,
  * их текст повторяет заголовки новостей и засорил бы поиск.
+ * После обхода по ссылкам (если включено) перебираются номера страниц `/node/N`: так находятся страницы, на которые не ведёт
+ * ни одна ссылка. Они помечаются как «сироты» ([FetchedDocument.orphan]).
  */
 class SiteCrawler(
     private val fetcher: PageFetcher,
@@ -43,6 +45,7 @@ class SiteCrawler(
         val failed = mutableListOf<String>()
         val visited = mutableSetOf(start)
         val identities = mutableSetOf<String>()
+        val knownNodes = mutableSetOf<Int>()
         val queue = ArrayDeque<Pair<String, Int>>().apply { add(start to 0) }
 
         while (queue.isNotEmpty()) {
@@ -53,8 +56,16 @@ class SiteCrawler(
                     if (!result.document.mediaType.startsWith("text/html")) {
                         log.debug { "Пропущено (${result.document.mediaType}): $url" }
                     } else {
+                        nodeIdOf(result.document)?.let { knownNodes += it }
                         // Страница списка (`?page=N`) нужна только как источник ссылок на новости.
-                        if (!isPaginationPage(url)) addDocument(result.document, host, identities)?.let { documents += it }
+                        if (!isPaginationPage(url)) {
+                            addDocument(result.document, host, identities)?.let {
+                                documents += it
+                                if (documents.size % PROGRESS_STEP == 0) {
+                                    log.info { "Обход по ссылкам: страниц ${documents.size}, адресов в очереди ${queue.size}" }
+                                }
+                            }
+                        }
                         if (depth < settings.maxDepth) {
                             for (link in links(result.document)) {
                                 if (link !in visited && isCrawlable(link, host, robots)) {
@@ -82,8 +93,71 @@ class SiteCrawler(
                 }
             }
         }
+        log.info { "Обход по ссылкам: страниц ${documents.size}, не найдено ${notFound.size}, ошибок ${failed.size}" }
+        if (settings.nodeScan.enabled) {
+            val orphans = scanNodes(start, host, robots, knownNodes, identities)
+            documents += orphans
+            log.info { "Перебор номеров: найдено страниц без ссылок ${orphans.size}" }
+        }
         log.info { "Обход завершён: страниц ${documents.size}, не найдено ${notFound.size}, ошибок ${failed.size}" }
         return CrawlResult(documents, notFound, failed)
+    }
+
+    /**
+     * Перебирает номера страниц `/node/N` и возвращает страницы, которых не было в обходе по ссылкам. Номер, уже известный по
+     * `<link rel="shortlink">`, не скачивается. Перебор останавливается после `maxConsecutiveMissing` подряд несуществующих номеров
+     * или на `maxId`. Несуществующие и закрытые номера (404, 403) — норма перебора: они не попадают в списки «не найдено» и «ошибки»,
+     * иначе индексация приняла бы их за удалённые страницы или за сбой сайта.
+     *
+     * @param start стартовый адрес, от него берутся схема и домен.
+     * @param host домен сайта.
+     * @param robots правила `robots.txt`.
+     * @param knownNodes номера страниц, найденных по ссылкам.
+     * @param identities адреса страниц, уже взятых в базу; пополняется.
+     */
+    private suspend fun scanNodes(
+        start: String,
+        host: String,
+        robots: RobotsRules,
+        knownNodes: Set<Int>,
+        identities: MutableSet<String>,
+    ): List<FetchedDocument> {
+        val scan = settings.nodeScan
+        val origin = start.substringBefore(host) + host
+        val found = mutableListOf<FetchedDocument>()
+        var missing = 0
+        var id = scan.firstId
+        while (id <= scan.maxId && missing < scan.maxConsecutiveMissing) {
+            val url = "$origin${scan.pathPrefix}$id"
+            if (id in knownNodes) {
+                missing = 0
+            } else if (isCrawlable(url, host, robots)) {
+                val result = fetcher.fetch(url)
+                if (result is FetchResult.Success && result.document.mediaType.startsWith("text/html")) {
+                    missing = 0
+                    addDocument(result.document.copy(orphan = true), host, identities)?.let {
+                        found += it
+                        log.debug { "Страница без ссылок: ${it.url} ($url)" }
+                    }
+                } else {
+                    missing++
+                }
+            }
+            if (id % PROGRESS_STEP == 0) log.info { "Перебор номеров: дошли до $id, найдено ${found.size}" }
+            id++
+        }
+        return found
+    }
+
+    /** Номер страницы из `<link rel="shortlink" href="…/node/N">`; `null`, если ссылки нет. */
+    private fun nodeIdOf(document: FetchedDocument): Int? {
+        if (!settings.nodeScan.enabled) return null
+        val href = Jsoup
+            .parse(document.body, document.url)
+            .selectFirst("link[rel=shortlink]")
+            ?.absUrl("href")
+            .orEmpty()
+        return href.substringAfter(settings.nodeScan.pathPrefix, "").toIntOrNull()
     }
 
     /**
@@ -212,5 +286,10 @@ class SiteCrawler(
                 RobotsRules.ALLOW_ALL
             }
         }
+    }
+
+    private companion object {
+        /** Через сколько страниц обход и сколько номеров перебор пишут строку прогресса. */
+        const val PROGRESS_STEP = 100
     }
 }

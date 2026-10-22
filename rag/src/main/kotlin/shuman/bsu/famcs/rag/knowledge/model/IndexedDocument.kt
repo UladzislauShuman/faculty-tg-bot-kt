@@ -14,4 +14,8 @@ class IndexedDocument(
     val pageType: PageType = PageType.SECTION,
     /** Год страницы; `null`, если неизвестен. */
     val year: Int? = null,
+    /** Оценка даты страницы: из имени картинки или текста (`DateExtractor`); `null`, если не найдена. */
+    val published: java.time.LocalDate? = null,
+    /** Страница-«сирота»: найдена перебором номеров, а не по ссылкам. Хранится у каждого фрагмента и понижает оценку. */
+    val orphan: Boolean = false,
 )

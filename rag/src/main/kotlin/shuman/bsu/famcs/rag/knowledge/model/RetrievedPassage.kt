@@ -16,4 +16,6 @@ data class RetrievedPassage(
     val pageType: PageType = PageType.SECTION,
     /** Год страницы; попадает в подпись раздела в промпте. */
     val year: Int? = null,
+    /** Оценка даты страницы; попадает в подпись раздела в промпте. */
+    val published: java.time.LocalDate? = null,
 )

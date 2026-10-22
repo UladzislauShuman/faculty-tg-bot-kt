@@ -8,7 +8,8 @@ import java.nio.file.Path
 /**
  * Читает набор вопросов `eval/qa-set.yaml`.
  *
- * Формат: список страниц; у каждой `url`, одиночные `questions` (`q`, `a`) и `scenarios` (`name`, `steps` с `q`, `a`).
+ * Формат: список страниц; у каждой `url`, одиночные `questions` (`q`, `a`, необязательный список `facts`) и `scenarios`
+ * (`name`, `steps` с теми же полями).
  * Страницы с `enabled: false` пропускаются. Правильной считается страница из `url`, приведённая к каноническому адресу по `eval/url-aliases.yaml`
  * (бот хранит страницу под каноническим адресом); когда разметка уточнится
  * (несколько страниц на вопрос), поменяется только этот загрузчик.
@@ -31,12 +32,13 @@ object QaSetLoader {
             val given = page.getValue("url") as String
             val url = aliases[given.trimEnd('/')] ?: given
             for (item in page.list("questions")) {
-                cases += EvalCase(cases.size + 1, item.text("q"), item.text("a"), url)
+                cases += EvalCase(cases.size + 1, item.text("q"), item.text("a"), url, facts = item.facts())
             }
             for (scenario in page.list("scenarios")) {
                 val name = scenario.text("name")
                 scenario.list("steps").forEachIndexed { index, step ->
-                    cases += EvalCase(cases.size + 1, step.text("q"), step.text("a"), url, scenario = name, step = index)
+                    cases +=
+                        EvalCase(cases.size + 1, step.text("q"), step.text("a"), url, scenario = name, step = index, facts = step.facts())
                 }
             }
         }
@@ -55,6 +57,9 @@ object QaSetLoader {
     /** Список вложенных записей по ключу; пустой, если ключа нет. */
     @Suppress("UNCHECKED_CAST")
     private fun Map<String, Any?>.list(key: String): List<Map<String, Any?>> = (this[key] as? List<Map<String, Any?>>).orEmpty()
+
+    /** Ключевые факты записи (`facts`); пустой список, если не заданы. */
+    private fun Map<String, Any?>.facts(): List<String> = (this["facts"] as? List<*>).orEmpty().map { it.toString().trim() }
 
     /** Текстовое поле записи; числа и даты в YAML приводятся к строке. */
     private fun Map<String, Any?>.text(key: String): String = this.getValue(key).toString().trim()

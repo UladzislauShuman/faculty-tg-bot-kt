@@ -61,7 +61,7 @@ class OpenAiCompatibleWireTest {
 
     private fun provider(
         baseUrl: String,
-        requestBody: Map<String, Any> = emptyMap(),
+        requestBody: Map<String, String> = emptyMap(),
     ): ChatModelProvider {
         val properties = LlmProperties.ProviderProperties(
             type = LlmProperties.ProviderType.OPENAI_COMPATIBLE,
@@ -126,12 +126,15 @@ class OpenAiCompatibleWireTest {
 
     @Test
     fun `дополнительные поля тела запроса уходят провайдеру, в том числе вложенные`() = runTest {
-        val extra = mapOf("thinking" to mapOf("type" to "disabled"))
+        val extra = mapOf("thinking" to """{"type":"disabled"}""", "enable_thinking" to "false", "seed" to "7", "note" to "текст")
 
         provider(startServer { 200 to okBody }, requestBody = extra).chat(call)
 
         val body = json.readTree(captured.single().body)
         assertEquals("disabled", body.get("thinking").get("type").asString(), "отключение рассуждений DeepSeek дошло до сервера")
+        assertEquals(false, body.get("enable_thinking").booleanValue(), "булево значение осталось булевым, а не строкой")
+        assertEquals(7, body.get("seed").intValue())
+        assertEquals("текст", body.get("note").asString(), "не JSON остаётся строкой")
     }
 
     @Test

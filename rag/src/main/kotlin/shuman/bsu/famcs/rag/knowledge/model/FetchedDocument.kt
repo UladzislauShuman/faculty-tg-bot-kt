@@ -10,4 +10,6 @@ data class FetchedDocument(
     val mediaType: String,
     val body: String,
     val fetchedAt: Instant,
+    /** Страница найдена перебором номеров, а не по ссылкам (на неё не ведёт ни одна ссылка сайта). */
+    val orphan: Boolean = false,
 )

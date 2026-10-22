@@ -23,6 +23,10 @@ internal object QdrantPayload {
     const val VERSION = "version"
     const val PAGE_TYPE = "page_type"
     const val YEAR = "year"
+    const val PUBLISHED = "published"
+
+    /** Страница-«сирота»: найдена перебором номеров. Поле пишется только со значением `true`. */
+    const val ORPHAN = "orphan"
     val HEADING_KEYS = listOf("H1", "H2", "H3")
 
     /**
@@ -51,6 +55,8 @@ internal object QdrantPayload {
         put(VERSION, ValueFactory.value(document.version))
         put(PAGE_TYPE, ValueFactory.value(document.pageType.name))
         document.year?.let { put(YEAR, ValueFactory.value(it.toLong())) }
+        document.published?.let { put(PUBLISHED, ValueFactory.value(it.toString())) }
+        if (document.orphan) put(ORPHAN, ValueFactory.value(true))
         chunk.headings.forEach { (name, text) -> put(headingKey(name), ValueFactory.value(text)) }
     }
 
@@ -81,6 +87,8 @@ internal object QdrantPayload {
             pageType =
                 text(PAGE_TYPE).takeIf { it.isNotEmpty() }?.let { runCatching { PageType.valueOf(it) }.getOrNull() } ?: PageType.SECTION,
             year = payload[YEAR]?.integerValue?.toInt(),
+            published = text(PUBLISHED).takeIf { it.isNotEmpty() }?.let(java.time.LocalDate::parse),
+            orphan = payload[ORPHAN]?.boolValue == true,
         )
     }
 }
