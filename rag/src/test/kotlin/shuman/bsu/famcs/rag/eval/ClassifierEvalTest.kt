@@ -47,23 +47,11 @@ class ClassifierEvalTest {
         val cases = positives + negatives
         val llm = EvalLlm.client()
 
-        val oldPrompts = PromptLibrary { name ->
-            when (name) {
-                "classifier-system" -> {
-                    OLD_SYSTEM
-                }
-
-                "classifier-human" -> {
-                    OLD_HUMAN
-                }
-
-                else -> {
-                    PromptLibrary::class.java
-                        .getResourceAsStream(
-                            "/prompts/$name.txt",
-                        )!!
-                        .use { it.readBytes().toString(Charsets.UTF_8) }
-                }
+        val oldPrompts = PromptLibrary { path ->
+            when (path) {
+                "/prompts/base/classifier-system.txt" -> OLD_SYSTEM
+                "/prompts/base/classifier-human.txt" -> OLD_HUMAN
+                else -> PromptLibrary::class.java.getResourceAsStream(path)?.use { it.readBytes().toString(Charsets.UTF_8) }
             }
         }
         val oldResult = run("старый промпт", LlmIntentClassifier(llm, oldPrompts, GreetingMatcher()), cases)

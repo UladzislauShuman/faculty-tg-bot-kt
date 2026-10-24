@@ -54,7 +54,8 @@ class EvalStack : AutoCloseable {
      * @param rerankWithContext подавать реранкеру название страницы и раздел.
      */
     fun retriever(
-        ranking: RankingPolicy = RankingPolicy(properties.ranking.typeWeights, properties.ranking.yearBoost),
+        ranking: RankingPolicy =
+            RankingPolicy(properties.ranking.typeWeights, properties.ranking.yearBoost, properties.ranking.orphanWeight),
         rerankWithContext: Boolean = properties.ranking.rerankWithContext,
         topN: Int = this.topN,
     ) = KnowledgeRetriever(

@@ -19,6 +19,7 @@ import shuman.bsu.famcs.rag.assistant.limit.service.RequestLimiter
 import shuman.bsu.famcs.rag.assistant.limit.service.WorkQueue
 import shuman.bsu.famcs.rag.assistant.pipeline.service.AnswerPipeline
 import shuman.bsu.famcs.rag.assistant.pipeline.service.AnswerRecorder
+import shuman.bsu.famcs.rag.assistant.pipeline.service.CostFooter
 import shuman.bsu.famcs.rag.assistant.pipeline.service.MaintenanceSwitch
 import shuman.bsu.famcs.rag.assistant.pipeline.service.Prechecks
 import shuman.bsu.famcs.rag.assistant.pipeline.service.ReplyAssembler
@@ -90,5 +91,18 @@ class PipelineConfiguration {
         properties: LimitProperties,
         alerts: Alerts,
         meters: MeterRegistry,
-    ): RagService = RagServiceImpl(prechecks, limits, queueGate, pipeline, recorder, assembler, messages, properties.queue, alerts, meters)
+        reply: ReplyProperties,
+    ): RagService = RagServiceImpl(
+        prechecks,
+        limits,
+        queueGate,
+        pipeline,
+        recorder,
+        assembler,
+        messages,
+        properties.queue,
+        alerts,
+        meters,
+        CostFooter(reply.cost),
+    )
 }

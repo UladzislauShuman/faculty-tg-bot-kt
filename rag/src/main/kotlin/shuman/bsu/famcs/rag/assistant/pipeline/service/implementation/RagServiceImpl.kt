@@ -11,6 +11,7 @@ import shuman.bsu.famcs.rag.api.model.RagReply
 import shuman.bsu.famcs.rag.api.model.RagRequest
 import shuman.bsu.famcs.rag.assistant.configuration.properties.BotMessagesProperties
 import shuman.bsu.famcs.rag.assistant.configuration.properties.LimitProperties
+import shuman.bsu.famcs.rag.assistant.configuration.properties.ReplyProperties
 import shuman.bsu.famcs.rag.assistant.limit.exception.OverloadedException
 import shuman.bsu.famcs.rag.assistant.limit.model.Admission
 import shuman.bsu.famcs.rag.assistant.limit.model.Denial
@@ -19,6 +20,7 @@ import shuman.bsu.famcs.rag.assistant.limit.service.WorkQueue
 import shuman.bsu.famcs.rag.assistant.pipeline.model.Precheck
 import shuman.bsu.famcs.rag.assistant.pipeline.service.AnswerPipeline
 import shuman.bsu.famcs.rag.assistant.pipeline.service.AnswerRecorder
+import shuman.bsu.famcs.rag.assistant.pipeline.service.CostFooter
 import shuman.bsu.famcs.rag.assistant.pipeline.service.Prechecks
 import shuman.bsu.famcs.rag.assistant.pipeline.service.ReplyAssembler
 import shuman.bsu.famcs.rag.llm.exception.LlmUnavailableException
@@ -52,6 +54,8 @@ class RagServiceImpl(
     private val queue: LimitProperties.Queue,
     private val alerts: Alerts,
     private val meters: MeterRegistry,
+    /** Строка стоимости под ответом; по умолчанию выключена. */
+    private val costFooter: CostFooter = CostFooter(ReplyProperties.Cost()),
 ) : RagService {
     /** Итог обработки для итоговой строки журнала: ответ, выбранная ветка и расход токенов. */
     private class Finished(
@@ -144,7 +148,7 @@ class RagServiceImpl(
         val answerId = recorder.recordAnswer(userId, question, result, usage.total, started.elapsedNow())
         val reply = RagReply(
             status = if (result.output.noInfo) AnswerStatus.NO_INFO else AnswerStatus.ANSWERED,
-            text = assembler.assemble(result.output),
+            text = assembler.assemble(result.output) + costFooter.render(usage.total)?.let { "\n\n$it" }.orEmpty(),
             sources = result.output.sources,
             answerId = answerId,
             trace = result.toTrace(usage.total),

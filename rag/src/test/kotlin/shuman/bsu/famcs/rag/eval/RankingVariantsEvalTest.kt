@@ -58,20 +58,18 @@ class RankingVariantsEvalTest {
     fun `варианты порядка выдачи на одном индексе`() = runBlocking {
         val cases = QaSetLoader.load(Path.of(System.getProperty("eval.qaSet", "eval/qa-set.yaml"))).filter { it.standalone }
         val properties = stack.properties.ranking
-        val withTypes = RankingPolicy(properties.typeWeights, yearBoost = 1.0)
-        val full = RankingPolicy(properties.typeWeights, properties.yearBoost)
+
+        // Контекст реранкеру проверен на прогонах C–F и вредит (hit@1 ниже): варианты с ним убраны, реранкер без контекста, как в приложении.
+        fun policy(orphanWeight: Double) = RankingPolicy(properties.typeWeights, properties.yearBoost, orphanWeight)
         val variants = listOf(
-            Variant(
-                "как было (без поправок, без контекста реранкеру)",
-            ) { stack.retriever(RankingPolicy.NEUTRAL, rerankWithContext = false) },
-            Variant("+ контекст реранкеру") { stack.retriever(RankingPolicy.NEUTRAL, rerankWithContext = true) },
-            Variant("только вес типа, без контекста реранкеру") { stack.retriever(withTypes, rerankWithContext = false) },
-            Variant("вес типа и год, без контекста реранкеру") { stack.retriever(full, rerankWithContext = false) },
-            Variant("+ вес типа страницы") { stack.retriever(withTypes, rerankWithContext = true) },
-            Variant("+ повышение года (настройки приложения)") { stack.retriever(full, rerankWithContext = true) },
-            Variant("без контекста реранкеру, 5 разделов") { stack.retriever(full, rerankWithContext = false, topN = 5) },
-            Variant("настройки приложения, 5 разделов") { stack.retriever(full, rerankWithContext = true, topN = 5) },
-            Variant("настройки приложения, 8 разделов") { stack.retriever(full, rerankWithContext = true, topN = 8) },
+            Variant("как было (без поправок)") { stack.retriever(RankingPolicy.NEUTRAL, rerankWithContext = false) },
+            Variant("вес типа и год, сироты без понижения (1,0)") { stack.retriever(policy(1.0), rerankWithContext = false) },
+            Variant("вес типа и год, сироты 0,8") { stack.retriever(policy(0.8), rerankWithContext = false) },
+            Variant("вес типа и год, сироты 0,6") { stack.retriever(policy(0.6), rerankWithContext = false) },
+            Variant("вес типа и год, сироты 0,4") { stack.retriever(policy(0.4), rerankWithContext = false) },
+            Variant("настройки приложения (сироты ${properties.orphanWeight}), 5 разделов") {
+                stack.retriever(policy(properties.orphanWeight), rerankWithContext = false, topN = 5)
+            },
         )
         val scores = variants.mapIndexed { index, variant ->
             println("Варианты порядка: ${index + 1} из ${variants.size} — ${variant.name}")

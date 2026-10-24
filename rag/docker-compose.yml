@@ -45,6 +45,8 @@ services:
     environment:
       # docker — адреса соседних контейнеров, журнал цветным текстом (json-logs — JSON); yandex — провайдер YandexGPT. Для локального Ollama уберите yandex.
       SPRING_PROFILES_ACTIVE: ${BOT_PROFILES:-docker,yandex}
+      # Профиль промптов (папка prompts/<профиль>/ поверх prompts/base/).
+      BOT_PROMPTS_PROFILE: ${BOT_PROMPTS_PROFILE:-base}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       BOT_HASH_SECRET: ${BOT_HASH_SECRET:?задайте BOT_HASH_SECRET в .env}
       BOT_TELEGRAM_TOKEN: ${BOT_TELEGRAM_TOKEN:-}

@@ -29,6 +29,8 @@ class LlmAnswerGenerator(
     private val noInfoMarker: String,
     /** Подписывать каждый раздел: «[Источник: название страницы, год]». */
     private val passageHeader: Boolean = false,
+    /** Другие фразы отказа: ответ с любой из них тоже считается «не нашёл». */
+    private val extraNoInfoMarkers: List<String> = emptyList(),
 ) : AnswerGenerator {
     init {
         // Если фразу в промпте поменяли, а в конфиге нет, «не нашёл» перестало бы распознаваться и под ним показывались бы источники.
@@ -47,7 +49,7 @@ class LlmAnswerGenerator(
         val reply = llm.complete(LlmRequest(LlmRole.GENERATOR, context.toMessages(system, human)))
         return GeneratedAnswer(
             text = reply.text.trim(),
-            noInfo = normalize(noInfoMarker) in normalize(reply.text),
+            noInfo = (listOf(noInfoMarker) + extraNoInfoMarkers).any { normalize(it) in normalize(reply.text) },
             provider = reply.provider,
             model = reply.model,
         )

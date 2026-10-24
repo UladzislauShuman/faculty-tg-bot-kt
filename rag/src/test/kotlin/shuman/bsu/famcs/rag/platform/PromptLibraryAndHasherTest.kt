@@ -9,10 +9,16 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class PromptLibraryTest {
-    private val library = PromptLibrary(loader = { name ->
-        mapOf("greeting" to "Привет, {name}! Вопрос: {input}\n\n")[name]
-            ?: error("нет $name")
+    private val library = PromptLibrary(loader = { path ->
+        mapOf("/prompts/base/greeting.txt" to "Привет, {name}! Вопрос: {input}\n\n")[path]
     })
+
+    /** Профиль `v2`, в котором переопределён только `greeting`; `farewell` есть лишь в `base`. */
+    private val files = mapOf(
+        "/prompts/base/greeting.txt" to "base: {name}",
+        "/prompts/base/farewell.txt" to "пока",
+        "/prompts/v2/greeting.txt" to "v2: {name}",
+    )
 
     @Test
     fun `значения подставляются на место меток, хвостовые переводы строк убираются`() {
@@ -29,6 +35,39 @@ class PromptLibraryTest {
     @Test
     fun `неизвестная метка остаётся как есть`() {
         assertEquals("Привет, {name}! Вопрос: x", library.render("greeting", "input" to "x"))
+    }
+
+    @Test
+    fun `профиль переопределяет только свои файлы, остальные берутся из base`() {
+        val v2 = PromptLibrary("v2", files::get)
+        val base = PromptLibrary(loader = files::get)
+
+        assertEquals("v2: Аня", v2.render("greeting", "name" to "Аня"))
+        assertEquals("пока", v2.render("farewell"))
+        assertEquals("base: Аня", base.render("greeting", "name" to "Аня"))
+        assertEquals("v2", v2.sourceOf("greeting"))
+        assertEquals("base", v2.sourceOf("farewell"))
+    }
+
+    @Test
+    fun `промпт, которого нет ни в профиле, ни в base, — ошибка с именем файла`() {
+        val error = kotlin.runCatching { PromptLibrary("v2", files::get).render("missing") }.exceptionOrNull()
+
+        assertTrue(error?.message.orEmpty().contains("prompts/base/missing.txt"))
+    }
+
+    @Test
+    fun `в каждом профиле ответ содержит фразу «не нашёл» и метки, иначе бот не запустится`() {
+        for (profile in listOf("base", "v2")) {
+            val library = PromptLibrary(profile)
+            val system = library.render("answer-system").lowercase()
+
+            assertTrue("в моей базе знаний пока нет точной информации" in system, "профиль $profile")
+            assertTrue("{context}" in system, "профиль $profile: место для разделов")
+            assertTrue("{input}" in library.render("answer-human"), "профиль $profile: место для вопроса")
+        }
+        assertEquals("v2", PromptLibrary("v2").sourceOf("rewrite-system"))
+        assertEquals("base", PromptLibrary("v2").sourceOf("judge-correctness"), "судья в v2 не меняется: сравнение идёт одним судьёй")
     }
 
     @Test

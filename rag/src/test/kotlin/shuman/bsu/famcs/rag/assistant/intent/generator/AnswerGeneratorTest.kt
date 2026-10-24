@@ -75,4 +75,24 @@ class AnswerGeneratorTest {
             LlmAnswerGenerator(ScriptedLlmClient.replying(""), PromptLibrary(), "такой фразы в промпте нет")
         }
     }
+
+    @Test
+    fun `дополнительные фразы отказа тоже дают признак «не нашёл», обычный ответ — нет`() = runTest {
+        val generator = { reply: String ->
+            LlmAnswerGenerator(
+                ScriptedLlmClient.replying(reply),
+                PromptLibrary(),
+                "в моей базе знаний пока нет точной информации",
+                extraNoInfoMarkers = listOf("не нашёл в документах факультета"),
+            )
+        }
+
+        val repeated = generator(
+            "Не нашёл в документах факультета, уточните вопрос.",
+        ).generate("Вопрос", context, listOf(passage("Раздел")))
+        val usual = generator("Деканом является Орлович Ю. Л.").generate("Вопрос", context, listOf(passage("Раздел")))
+
+        assertEquals(true, repeated.noInfo, "формулировка из истории диалога распознаётся как отказ")
+        assertEquals(false, usual.noInfo)
+    }
 }
